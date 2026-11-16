@@ -11,6 +11,7 @@ import { ApiError } from "./lib/errors.js";
 import { registerActiveAccountGuard } from "./auth/guard.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerRoutes } from "./routes/index.js";
+import { registerPublicRoutes } from "./routes/public.js";
 import type { Database } from "./db.js";
 import type { Env } from "./env.js";
 
@@ -147,7 +148,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply
       .header("Cache-Control", "no-cache")
       .type("text/html; charset=utf-8")
-      .send(webIndex(env));
+      .send(landingHtml(env));
   });
 
   await registerHealthRoutes(app, { env, pool });
@@ -155,20 +156,32 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   const webRoot = webDistPath(env);
   if (webRoot) {
+    await registerPublicRoutes(app, { webRoot });
+  }
+
+  if (webRoot) {
     await app.register(fastifyStatic, {
       root: webRoot,
       prefix: "/",
       wildcard: false,
-      setHeaders: (response, filePath) => {
+      index: [],
+      setHeaders: (reply, filePath, stat) => {
         if (filePath.endsWith("sw.js") || filePath.includes("workbox")) {
-          response.header("Cache-Control", "no-cache, no-store, must-revalidate");
+          reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
         } else if (/[\\/]assets[\\/]/.test(filePath)) {
           // Everything Vite emits under assets/ carries a content hash.
-          response.header("Cache-Control", "public, max-age=31536000, immutable");
-        } else if (filePath.endsWith(".html") || filePath.endsWith("manifest.webmanifest")) {
-          response.header("Cache-Control", "no-cache");
+          reply.header("Cache-Control", "public, max-age=31536000, immutable");
+        } else if (
+          filePath.endsWith(".html") ||
+          filePath.endsWith("manifest.webmanifest") ||
+          filePath.endsWith("robots.txt") ||
+          filePath.endsWith("sitemap.xml") ||
+          filePath.endsWith("google8f7d1df9250d42ff.html")
+        ) {
+          reply.header("Cache-Control", "no-cache");
         }
       },
+      suppressWarning: true,
     });
   }
 
@@ -185,10 +198,10 @@ function webDistPath(env: Env): string | null {
   return existsSync(resolve(root, "index.html")) ? root : null;
 }
 
-function webIndex(env: Env): string {
+function landingHtml(env: Env): string {
   const root = webDistPath(env);
   if (!root) {
-    return "<!doctype html><title>DueRadar API</title><p>The web build is not present in this environment.</p>";
+    return "<!doctype html><title>DueRadar | Bill, Subscription &amp; Free Trial Tracker</title><p>The web build is not present in this environment.</p>";
   }
   return readFileSync(resolve(root, "index.html"), "utf8");
 }

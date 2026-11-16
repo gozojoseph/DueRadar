@@ -1,0 +1,39 @@
+# DueRadar — public crawl instructions
+# Hosted at https://app.dueradar.cloud
+
+User-agent: *
+Allow: /
+Allow: /favicon.svg
+Allow: /favicon.ico
+Allow: /manifest.webmanifest
+Allow: /icons/
+Allow: /assets/
+Allow: /privacy
+Allow: /terms
+Allow: /security
+Disallow: /sign-in
+Disallow: /sign-up
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /dashboard
+Disallow: /subscriptions
+Disallow: /subscriptions/
+Disallow: /occurrences
+Disallow: /calendar
+Disallow: /import
+Disallow: /detections
+Disallow: /notifications
+Disallow: /settings
+Disallow: /settings/
+Disallow: /admin
+Disallow: /billing
+Disallow: /plan-required
+Disallow: /account
+Disallow: /api/
+Disallow: /onboarding
+Disallow: /oauth/
+Disallow: /test/
+Disallow: /webhooks/
+Disallow: /landing.html
+Sitemap: https://app.dueradar.cloud/sitemap.xml
