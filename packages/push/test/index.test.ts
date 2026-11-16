@@ -1,5 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
-import { validatePushEndpoint } from "../src/index.js";
+import webpush from "web-push";
+import { createPushClient, validatePushEndpoint } from "../src/index.js";
+
+describe("createPushClient", () => {
+  it("bounds each outgoing push request", async () => {
+    const keys = webpush.generateVAPIDKeys();
+    const sendNotification = vi.spyOn(webpush, "sendNotification").mockResolvedValue({
+      statusCode: 201,
+      body: "",
+      headers: {},
+    });
+    const client = createPushClient({
+      publicKey: keys.publicKey,
+      privateKey: keys.privateKey,
+      subject: "mailto:test@example.com",
+    });
+
+    await client.send(
+      {
+        endpoint: "https://8.8.8.8/push",
+        p256dh: "test",
+        auth: "test",
+      },
+      { title: "Test", body: "Test" },
+    );
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(String),
+      expect.objectContaining({ timeout: 10_000 }),
+    );
+    sendNotification.mockRestore();
+  });
+});
 
 describe("validatePushEndpoint", () => {
   it.each([

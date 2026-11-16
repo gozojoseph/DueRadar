@@ -46,6 +46,22 @@ interface ResolvedEndpoint {
 
 type EndpointLookup = typeof lookup;
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function resolvePublicEndpoint(
   endpoint: string,
   lookupImpl: EndpointLookup = lookup,
@@ -116,7 +132,11 @@ export function createPushClient(config: PushClientConfig) {
 
     let agent: https.Agent | undefined;
     try {
-      const resolved = await resolvePublicEndpoint(subscription.endpoint);
+      const resolved = await withTimeout(
+        resolvePublicEndpoint(subscription.endpoint),
+        5_000,
+        "Push endpoint DNS resolution timed out.",
+      );
       agent = new https.Agent({
         lookup: (hostname, _options, callback) => {
           if (hostname.replace(/^\[|\]$/g, "").toLowerCase() !== resolved.hostname) {
@@ -132,7 +152,7 @@ export function createPushClient(config: PushClientConfig) {
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         JSON.stringify(payload),
-        { TTL: 60 * 60 * 6, urgency: "normal", agent },
+        { TTL: 60 * 60 * 6, urgency: "normal", timeout: 10_000, agent },
       );
       return { ok: true, gone: false, statusCode: response.statusCode };
     } catch (error) {
