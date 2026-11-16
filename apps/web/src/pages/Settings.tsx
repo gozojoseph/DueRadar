@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   BellRing,
   Check,
   CreditCard,
+  Crown,
   Download,
   LogOut,
   Mail,
@@ -36,6 +37,7 @@ import { api, errorMessage } from "../lib/api";
 import { useAuth } from "../lib/session";
 import {
   useCategories,
+  useBillingPlan,
   useConfig,
   useCreateCategory,
   useCreatePaymentMethod,
@@ -49,7 +51,9 @@ import {
   useRegisterDevice,
   useTestEmail,
   useTestPush,
+  useStartBillingCheckout,
   useUpdateProfile,
+  useVerifyBillingCheckout,
 } from "../lib/queries";
 import { pushSupported, subscribeToPush, unsubscribeFromPush } from "../lib/push";
 
@@ -81,6 +85,7 @@ const METHOD_KINDS = [
 ] as const;
 
 const SECTION_LINKS = [
+  { href: "#plan", label: "Plan" },
   { href: "#profile", label: "Profile" },
   { href: "#reminders", label: "Reminders" },
   { href: "#notifications", label: "Notifications" },
@@ -92,6 +97,7 @@ const SECTION_LINKS = [
 export function SettingsPage() {
   const me = useMe();
   const config = useConfig();
+  const plan = useBillingPlan();
   const devices = useDevices();
   const categories = useCategories();
   const methods = usePaymentMethods();
@@ -104,10 +110,14 @@ export function SettingsPage() {
   const removeDevice = useRemoveDevice();
   const testEmail = useTestEmail();
   const testPush = useTestPush();
+  const startBillingCheckout = useStartBillingCheckout();
+  const verifyBillingCheckout = useVerifyBillingCheckout();
   const markNotifications = useMarkNotificationsRead();
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+  const billingReturnHandled = useRef(false);
 
   const [profileForm, setProfileForm] = useState({
     displayName: "",
@@ -141,6 +151,50 @@ export function SettingsPage() {
     | null
   >(null);
   const [exporting, setExporting] = useState(false);
+  const [pendingPaymentReference, setPendingPaymentReference] = useState<string | null>(null);
+  const billingReference = searchParams.get("reference");
+  const billingReturn = searchParams.get("billing") === "return";
+
+  useEffect(() => {
+    if (!billingReturn || billingReturnHandled.current) return;
+    billingReturnHandled.current = true;
+    const clearPaymentParams = () => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("billing");
+      next.delete("reference");
+      next.delete("trxref");
+      setSearchParams(next, { replace: true });
+    };
+    if (!billingReference) {
+      toast("The payment provider did not return a payment reference.", "error");
+      clearPaymentParams();
+      return;
+    }
+
+    void verifyBillingCheckout
+      .mutateAsync(billingReference)
+      .then((result) => {
+        toast(
+          result.status === "paid"
+            ? "DueRadar Plus is active. Thank you!"
+            : "Payment is not confirmed yet. Your plan will update after Paystack confirms it.",
+          result.status === "paid" ? "success" : "info",
+        );
+        setPendingPaymentReference(result.status === "pending" ? billingReference : null);
+      })
+      .catch((caught) => {
+        setPendingPaymentReference(billingReference);
+        toast(errorMessage(caught), "error");
+      })
+      .finally(clearPaymentParams);
+  }, [
+    billingReference,
+    billingReturn,
+    searchParams,
+    setSearchParams,
+    toast,
+    verifyBillingCheckout,
+  ]);
 
   useEffect(() => {
     if (loaded || !me.data) return;
@@ -197,6 +251,30 @@ export function SettingsPage() {
       toast("Profile updated.");
     } catch (caught) {
       setProfileError(errorMessage(caught));
+    }
+  }
+
+  async function beginCheckout(interval: "monthly" | "annual") {
+    try {
+      const result = await startBillingCheckout.mutateAsync(interval);
+      window.location.assign(result.checkoutUrl);
+    } catch (caught) {
+      toast(errorMessage(caught), "error");
+    }
+  }
+
+  async function checkPendingPayment() {
+    if (!pendingPaymentReference) return;
+    try {
+      const result = await verifyBillingCheckout.mutateAsync(pendingPaymentReference);
+      if (result.status === "paid") {
+        setPendingPaymentReference(null);
+        toast("DueRadar Plus is active. Thank you!");
+      } else {
+        toast("Paystack has not confirmed the payment yet.", "info");
+      }
+    } catch (caught) {
+      toast(errorMessage(caught), "error");
     }
   }
 
@@ -395,6 +473,91 @@ export function SettingsPage() {
       </nav>
 
       <div className="space-y-5">
+        <section id="plan" className="scroll-mt-24">
+          <Card className="p-5 sm:p-6">
+            <SectionTitle
+              icon={<Crown className="h-4 w-4" />}
+              title="Your DueRadar plan"
+              description="Plus helps you track everything and import receipts by email."
+            />
+            {plan.isLoading ? <LoadingBlock label="Loading your plan" /> : null}
+            {plan.isError ? (
+              <Note tone="error" className="mb-4">
+                Could not load your plan. {errorMessage(plan.error)}
+              </Note>
+            ) : null}
+            {plan.data ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={plan.data.tier === "plus" ? "brand" : "slate"}>
+                    {plan.data.tier === "plus" ? "DueRadar Plus" : "Free plan"}
+                  </Badge>
+                  {plan.data.grandfathered ? (
+                    <span className="text-xs text-muted">Lifetime access for existing members</span>
+                  ) : plan.data.expiresAt ? (
+                    <span className="text-xs text-muted">
+                      {plan.data.tier === "plus" ? "Access until" : "Plus expired"}{" "}
+                      {new Date(plan.data.expiresAt).toLocaleDateString()}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-ink-soft">
+                  {plan.data.activeItemLimit === null
+                    ? `${plan.data.activeItems} active items · no limit`
+                    : `${plan.data.activeItems} of ${plan.data.activeItemLimit} active items used`}
+                </p>
+                {!plan.data.grandfathered ? (
+                  <>
+                    {!plan.data.configured ? (
+                      <Note tone="warn" className="mt-4">
+                        Online payments are not configured yet. Your current plan remains available.
+                      </Note>
+                    ) : null}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        disabled={!plan.data.configured || startBillingCheckout.isPending}
+                        loading={startBillingCheckout.isPending}
+                        onClick={() => void beginCheckout("monthly")}
+                      >
+                        {plan.data.tier === "plus" ? "Renew" : "Plus"} · GHS{" "}
+                        {plan.data.prices.monthly.amount}/month
+                      </Button>
+                      <Button
+                        disabled={!plan.data.configured || startBillingCheckout.isPending}
+                        loading={startBillingCheckout.isPending}
+                        onClick={() => void beginCheckout("annual")}
+                      >
+                        {plan.data.tier === "plus" ? "Renew" : "Plus"} · GHS{" "}
+                        {plan.data.prices.annual.amount}/year
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted">
+                      {plan.data.tier === "plus"
+                        ? "One-time renewal extends your current term. No automatic charges."
+                        : "One-time payment for the selected term. No automatic charges."}
+                    </p>
+                  </>
+                ) : null}
+                {pendingPaymentReference ? (
+                  <Note tone="warn" className="mt-4">
+                    Payment confirmation is still pending.
+                    <Button
+                      className="ml-2"
+                      variant="ghost"
+                      size="sm"
+                      loading={verifyBillingCheckout.isPending}
+                      onClick={() => void checkPendingPayment()}
+                    >
+                      Check payment
+                    </Button>
+                  </Note>
+                ) : null}
+              </>
+            ) : null}
+          </Card>
+        </section>
+
         <section id="profile" className="scroll-mt-24">
           <Card className="p-5 sm:p-6">
             <SectionTitle

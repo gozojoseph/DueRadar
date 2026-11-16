@@ -190,7 +190,7 @@ export async function listSubscriptions(
 }
 
 export async function getOwnedSubscription(
-  db: Database,
+  db: DatabaseExecutor,
   userId: string,
   subscriptionId: string,
 ): Promise<Subscription | null> {
@@ -256,7 +256,7 @@ export async function createSubscription(
 }
 
 export async function updateSubscription(
-  db: Database,
+  db: DatabaseExecutor,
   userId: string,
   subscriptionId: string,
   patch: SubscriptionPatch,

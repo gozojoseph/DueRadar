@@ -34,6 +34,7 @@ import {
 import { badRequest, conflict, notFound } from "../lib/errors.js";
 import type { Database } from "../db.js";
 import { createSubscription, type SubscriptionInput } from "./subscriptions.js";
+import { enforceActiveItemLimit, lockPlanForUser } from "./plan.js";
 import type { DraftEnhancer } from "./llm-detect.js";
 
 const HOUR_MS = 3_600_000;
@@ -1150,6 +1151,8 @@ export async function acceptSuggestion(
   const source = draft.transactions ? "import" : "detection";
 
   const accepted = await db.transaction(async (tx) => {
+    await lockPlanForUser(tx, userId);
+    await enforceActiveItemLimit(tx, userId);
     const [claimed] = await tx
       .update(detectionSuggestions)
       .set({ status: "accepted", resolvedAt: new Date() })

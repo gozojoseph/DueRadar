@@ -3,8 +3,10 @@ import { requireUser } from "../auth/guard.js";
 import type { Database } from "../db.js";
 import { isInboundEmailConfigured, type Env } from "../env.js";
 import { recordAudit } from "../lib/audit.js";
-import { conflict, parseBody } from "../lib/errors.js";
+import { conflict, parseBody, paymentRequired } from "../lib/errors.js";
 import { emailAliasCreateSchema } from "../schemas.js";
+import { ensureProfile } from "../services/profile.js";
+import { getPlanAccess } from "../services/plan.js";
 import {
   createAlias,
   getActiveAlias,
@@ -46,6 +48,11 @@ export async function registerEmailAliasRoutes(
       const user = await requireUser(request, env);
       if (!configured) {
         throw conflict("Email forwarding is not configured for this environment.");
+      }
+      await ensureProfile(db, user);
+      const plan = await getPlanAccess(db, user.id);
+      if (!plan.canUseEmailImport) {
+        throw paymentRequired("Email forwarding is a DueRadar Plus feature.");
       }
       const input = parseBody(emailAliasCreateSchema, request.body ?? {});
       const alias = await createAlias(db, user.id, env.INBOUND_EMAIL_DOMAIN ?? "", {

@@ -2,13 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DetectionSuggestion } from "@dueradar/db/schema";
 import type { Database } from "../src/db.js";
 
-const { createSubscriptionMock } = vi.hoisted(() => ({
+const { createSubscriptionMock, enforcePlanLimitMock, lockPlanMock } = vi.hoisted(() => ({
   createSubscriptionMock: vi.fn(),
+  enforcePlanLimitMock: vi.fn(),
+  lockPlanMock: vi.fn(),
 }));
 
 vi.mock("../src/services/subscriptions.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/services/subscriptions.js")>()),
   createSubscription: createSubscriptionMock,
+}));
+
+vi.mock("../src/services/plan.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/services/plan.js")>()),
+  enforceActiveItemLimit: enforcePlanLimitMock,
+  lockPlanForUser: lockPlanMock,
 }));
 
 import { acceptSuggestion } from "../src/services/detection.js";

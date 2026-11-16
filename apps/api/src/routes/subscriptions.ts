@@ -7,6 +7,7 @@ import { badRequest, notFound, parseBody } from "../lib/errors.js";
 import { recordAudit } from "../lib/audit.js";
 import { subscriptionInputSchema, subscriptionUpdateSchema } from "../schemas.js";
 import { ensureProfile } from "../services/profile.js";
+import { enforceActiveItemLimit, lockPlanForUser } from "../services/plan.js";
 import {
   createSubscription,
   deleteSubscription,
@@ -59,12 +60,11 @@ export async function registerSubscriptionRoutes(
     const profile = await ensureProfile(db, user);
 
     try {
-      const subscription = await createSubscription(
-        db,
-        user.id,
-        toInput(input),
-        profile.timezone,
-      );
+      const subscription = await db.transaction(async (tx) => {
+        await lockPlanForUser(tx, user.id);
+        await enforceActiveItemLimit(tx, user.id);
+        return createSubscription(tx, user.id, toInput(input), profile.timezone);
+      });
       await recordAudit(db, request, {
         userId: user.id,
         action: "subscription.created",
@@ -94,13 +94,21 @@ export async function registerSubscriptionRoutes(
     const profile = await ensureProfile(db, user);
 
     try {
-      const subscription = await updateSubscription(
-        db,
-        user.id,
-        id,
-        patch as Partial<SubscriptionInput>,
-        profile.timezone,
-      );
+      const subscription = await db.transaction(async (tx) => {
+        await lockPlanForUser(tx, user.id);
+        const existing = await getOwnedSubscription(tx, user.id, id);
+        if (!existing) return null;
+        if (patch.status === "active" && existing.status !== "active") {
+          await enforceActiveItemLimit(tx, user.id);
+        }
+        return updateSubscription(
+          tx,
+          user.id,
+          id,
+          patch as Partial<SubscriptionInput>,
+          profile.timezone,
+        );
+      });
       if (!subscription) throw notFound("Subscription not found.");
       await recordAudit(db, request, {
         userId: user.id,
@@ -138,16 +146,15 @@ export async function registerSubscriptionRoutes(
       const user = await userWithEmail(request, env, await requireUser(request, env));
       const { id } = request.params as { id: string };
       const profile = await ensureProfile(db, user);
-      const existing = await getOwnedSubscription(db, user.id, id);
-      if (!existing) throw notFound("Subscription not found.");
-
-      const subscription = await updateSubscription(
-        db,
-        user.id,
-        id,
-        { status },
-        profile.timezone,
-      );
+      const subscription = await db.transaction(async (tx) => {
+        await lockPlanForUser(tx, user.id);
+        const existing = await getOwnedSubscription(tx, user.id, id);
+        if (!existing) return null;
+        if (status === "active" && existing.status !== "active") {
+          await enforceActiveItemLimit(tx, user.id);
+        }
+        return updateSubscription(tx, user.id, id, { status }, profile.timezone);
+      });
       if (!subscription) throw notFound("Subscription not found.");
       await recordAudit(db, request, {
         userId: user.id,

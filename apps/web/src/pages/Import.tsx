@@ -35,6 +35,7 @@ import {
 } from "../components/ui";
 import {
   useCreateEmailAlias,
+  useBillingPlan,
   useCsvImport,
   useCsvPreview,
   useDeleteImport,
@@ -285,6 +286,7 @@ function PasteTab({ onResult }: { onResult: (result: MessageImportResult) => voi
 /* ---------------------------------- email --------------------------------- */
 
 function EmailTab() {
+  const plan = useBillingPlan();
   const alias = useEmailAlias();
   const create = useCreateEmailAlias();
   const revoke = useRevokeEmailAlias();
@@ -359,6 +361,16 @@ function EmailTab() {
             a CSV meanwhile. If this is unexpected, contact {data.domain ?? "support"}.
           </Note>
         ) : null}
+        {plan.data && !plan.data.canUseEmailImport ? (
+          <Note tone="warn" className="mt-3">
+            Email import is a DueRadar Plus feature. Existing messages and your address are kept,
+            but new forwarded mail will not be processed while you are on Free.{" "}
+            <Link to="/settings#plan" className="font-semibold text-brand-700 hover:underline">
+              See plans
+            </Link>
+            .
+          </Note>
+        ) : null}
 
         {data.alias ? (
           <>
@@ -405,7 +417,12 @@ function EmailTab() {
             </ol>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setConfirmRotate(true)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={Boolean(plan.data && !plan.data.canUseEmailImport)}
+                onClick={() => setConfirmRotate(true)}
+              >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Replace address
               </Button>
@@ -422,15 +439,24 @@ function EmailTab() {
               variants such as <code className="font-mono">+netflix</code> also work, which makes it
               easy to see which service shared your address.
             </p>
-            <Button
-              className="mt-4"
-              loading={create.isPending}
-              disabled={!data.configured}
-              onClick={() => void createAlias(false)}
-            >
-              <Mail className="h-4 w-4" />
-              Create my forwarding address
-            </Button>
+            {plan.data && !plan.data.canUseEmailImport ? (
+              <Link to="/settings#plan" className="mt-4 inline-block">
+                <Button variant="secondary">
+                  <Mail className="h-4 w-4" />
+                  Upgrade to Plus
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                className="mt-4"
+                loading={create.isPending}
+                disabled={!data.configured}
+                onClick={() => void createAlias(false)}
+              >
+                <Mail className="h-4 w-4" />
+                Create my forwarding address
+              </Button>
+            )}
           </div>
         )}
       </Card>

@@ -7,6 +7,7 @@ import {
 import { api } from "./api";
 import type {
   CalendarData,
+  BillingPlan,
   Category,
   Config,
   CsvImportResult,
@@ -45,6 +46,7 @@ const ALL_KEYS = [
   ["imports"],
   ["importHistory"],
   ["emailAlias"],
+  ["billing"],
 ] as const;
 
 export function useRefreshAll() {
@@ -71,6 +73,37 @@ export function useConfig() {
     queryFn: () => api.get<Config>("/config"),
     staleTime: 60 * 60_000,
     retry: 1,
+  });
+}
+
+export function useBillingPlan() {
+  return useQuery({
+    queryKey: ["billing"],
+    queryFn: () => api.get<BillingPlan>("/billing"),
+    staleTime: 30_000,
+  });
+}
+
+export function useStartBillingCheckout() {
+  return useMutation({
+    mutationFn: (interval: "monthly" | "annual") =>
+      api.post<{ checkoutUrl: string; reference: string }>("/billing/checkout", { interval }),
+  });
+}
+
+export function useVerifyBillingCheckout() {
+  const refresh = useRefreshAll();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reference: string) =>
+      api.post<{ status: "paid" | "pending"; activated?: boolean; accessUntil?: string | null }>(
+        "/billing/verify",
+        { reference },
+      ),
+    onSuccess: async () => {
+      await refresh();
+      await queryClient.invalidateQueries({ queryKey: ["billing"] });
+    },
   });
 }
 

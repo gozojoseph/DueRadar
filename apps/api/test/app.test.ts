@@ -13,6 +13,7 @@ const baseEnv = {
   DATABASE_URL: "postgresql://dueradar:secret@localhost:5432/dueradar",
   NEON_AUTH_BASE_URL: "https://auth.example.test/dueradar/auth",
   APP_ORIGIN: "http://localhost:5173",
+  PAYSTACK_SECRET_KEY: "sk_test_never_expose",
   SERVE_WEB: "false",
 };
 
@@ -99,6 +100,8 @@ describe("public config", () => {
     expect(body).not.toContain("postgresql://");
     expect(body).not.toContain("VAPID_PRIVATE_KEY");
     expect(body).not.toContain("RESEND_API_KEY");
+    expect(body).not.toContain("PAYSTACK_SECRET_KEY");
+    expect(body).not.toContain("sk_test_never_expose");
   });
 });
 

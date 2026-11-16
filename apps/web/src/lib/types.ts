@@ -24,6 +24,9 @@ export interface Profile {
   quietHoursEnd: string;
   emailReminders: boolean;
   pushReminders: boolean;
+  planTier: "free" | "plus";
+  planExpiresAt: string | null;
+  planGrandfathered: boolean;
   onboardedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -431,6 +434,20 @@ export interface EmailAliasResponse {
   alias: EmailAlias | null;
   configured: boolean;
   domain: string | null;
+}
+
+export interface BillingPlan {
+  tier: "free" | "plus";
+  grandfathered: boolean;
+  expiresAt: string | null;
+  activeItems: number;
+  activeItemLimit: number | null;
+  canUseEmailImport: boolean;
+  configured: boolean;
+  prices: {
+    monthly: { currency: "GHS"; amount: string };
+    annual: { currency: "GHS"; amount: string };
+  };
 }
 
 export interface DetectionAcceptOverrides {

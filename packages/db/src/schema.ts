@@ -44,6 +44,9 @@ export type PaymentSource = "manual" | "import" | "detection";
 export type SuggestionStatus = "pending" | "accepted" | "rejected";
 export type ImportStatus = "pending" | "processed" | "failed" | "expired";
 export type ProviderConnectionStatus = "active" | "revoked" | "error";
+export type PlanTier = "free" | "plus";
+export type BillingInterval = "monthly" | "annual";
+export type BillingTransactionStatus = "pending" | "paid" | "failed";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -65,12 +68,48 @@ export const profiles = pgTable(
     quietHoursEnd: text("quiet_hours_end").notNull().default("07:00"),
     emailReminders: boolean("email_reminders").notNull().default(true),
     pushReminders: boolean("push_reminders").notNull().default(false),
+    planTier: text("plan_tier").$type<PlanTier>().notNull().default("free"),
+    planExpiresAt: timestamp("plan_expires_at", { withTimezone: true }),
+    planGrandfathered: boolean("plan_grandfathered").notNull().default(false),
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     check("profiles_currency_check", sql`${table.currency} ~ '^[A-Z]{3}$'`),
     check("profiles_week_start_check", sql`${table.weekStartsOn} between 0 and 1`),
+    check("profiles_plan_tier_check", sql`${table.planTier} in ('free','plus')`),
+  ],
+);
+
+export const billingTransactions = pgTable(
+  "billing_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    reference: varchar("reference", { length: 100 }).notNull(),
+    interval: text("interval").$type<BillingInterval>().notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull().default("GHS"),
+    status: text("status").$type<BillingTransactionStatus>().notNull().default("pending"),
+    providerTransactionId: text("provider_transaction_id"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    accessUntil: timestamp("access_until", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("billing_transactions_reference_uq").on(table.reference),
+    uniqueIndex("billing_transactions_provider_id_uq").on(table.providerTransactionId),
+    index("billing_transactions_user_created_idx").on(table.userId, table.createdAt),
+    check(
+      "billing_transactions_interval_check",
+      sql`${table.interval} in ('monthly','annual')`,
+    ),
+    check(
+      "billing_transactions_status_check",
+      sql`${table.status} in ('pending','paid','failed')`,
+    ),
+    check("billing_transactions_amount_check", sql`${table.amountMinor} > 0`),
+    check("billing_transactions_currency_check", sql`${table.currency} = 'GHS'`),
   ],
 );
 
@@ -452,6 +491,7 @@ export const auditEvents = pgTable(
 );
 
 export type Profile = typeof profiles.$inferSelect;
+export type BillingTransaction = typeof billingTransactions.$inferSelect;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;
 export type BillingOccurrence = typeof billingOccurrences.$inferSelect;

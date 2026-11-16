@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eq, sql, type SQL } from "drizzle-orm";
 import {
   auditEvents,
+  billingTransactions,
   billingOccurrences,
   categories,
   detectionSuggestions,
@@ -66,6 +67,7 @@ export async function registerAccountRoutes(
 
     await db.transaction(async (tx) => {
       // Deleting jobs cascades to delivery attempts.
+      await tx.delete(billingTransactions).where(eq(billingTransactions.userId, user.id));
       await tx.delete(reminderJobs).where(eq(reminderJobs.userId, user.id));
       await tx.delete(notifications).where(eq(notifications.userId, user.id));
       await tx.delete(devices).where(eq(devices.userId, user.id));

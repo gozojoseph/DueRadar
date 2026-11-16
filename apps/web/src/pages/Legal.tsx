@@ -166,6 +166,8 @@ export function PrivacyPage() {
             "Account data: your name, email address, sign-in identifiers, verification status and password hash. Passwords are salted and hashed by our authentication provider; we never see them in plain text.",
             "Tracking data you enter: names, vendors, amounts, currencies, billing cycles, due dates, trial end dates, categories, payment-method labels, notes and optional links.",
             "Payment log entries: the date, amount, method label and optional reference you record when you mark something paid. These are records of payments you say you made, not payment instructions.",
+            "DueRadar Plus billing data: plan and term, transaction reference, amount, currency, payment status and the email used at hosted checkout. Paystack processes the purchase; we do not receive or store card details or mobile-money PINs.",
+            "DueRadar Plus billing data: plan and term, transaction reference, amount, currency, payment status and the email used at hosted checkout. Paystack processes the purchase; we do not receive or store card details or mobile-money PINs.",
             "Reminder preferences: your time zone, preferred reminder time, quiet hours, week start, email and push choices.",
             "Device data: a push endpoint and encryption keys for each browser or phone you enable, plus limited user-agent information so you can recognise the device.",
             "Delivery data: reminder jobs, delivery attempts, in-app notifications and read state.",
@@ -184,8 +186,10 @@ export function PrivacyPage() {
           ]}
         />
         <p>
-          DueRadar is a tracker, not a payment service. It does not move money, initiate charges, or
-          cancel subscriptions with providers.
+          DueRadar does not move money or cancel subscriptions with providers. Optional Plus
+          purchases are one-time payments through Paystack hosted checkout; we do not initiate
+          automatic renewals or store payment credentials. Refund requests are reviewed case by case
+          under applicable law; contact support.
         </p>
       </Section>
 
@@ -195,6 +199,8 @@ export function PrivacyPage() {
             "To create your account, verify your email, sign you in and keep your session secure.",
             "To store the records you add and calculate projected due dates from the schedule you entered.",
             "To send the reminders you asked for by email, push and in-app notification, while respecting quiet hours.",
+            "To confirm DueRadar Plus purchases, grant the purchased access term, and prevent duplicate payment processing.",
+            "To confirm DueRadar Plus purchases, grant the purchased access term, and prevent duplicate payment processing.",
             "To show your own data back to you and to enforce ownership on every read and write.",
             "To provide support when you contact us, and to investigate abuse or security incidents.",
             "To meet legal obligations, including responding to lawful requests and maintaining deletion records.",
@@ -216,6 +222,8 @@ export function PrivacyPage() {
             "Neon (database and managed authentication) for storage and sign-in. Our primary database region is London, United Kingdom.",
             "Render (application hosting) for the web service and background worker. Our development environment runs in Frankfurt, Germany.",
             "Resend (transactional email) for verification codes, reminder emails and account notices.",
+            "Paystack (hosted checkout and payment verification) for DueRadar Plus purchases. Paystack receives the email, amount, currency and transaction reference needed to process the payment; card and mobile-money credentials are entered directly with Paystack.",
+            "Paystack (hosted checkout and payment verification) for DueRadar Plus purchases. Paystack receives the email, amount, currency and transaction reference needed to process the payment; card and mobile-money credentials are entered directly with Paystack.",
             "Browser push services operated by Apple, Google and Mozilla for delivering notifications to devices you register.",
           ]}
         />
@@ -230,8 +238,9 @@ export function PrivacyPage() {
         <p>
           Our database is hosted in the United Kingdom and our application in the European Union, so
           data may be processed outside Ghana. Email and push delivery may involve providers in the
-          United States. We choose providers with appropriate contractual and technical safeguards,
-          and we only transfer the minimum needed for the service.
+          United States. Paystack processing locations depend on the merchant account and payment
+          method. We choose providers with appropriate contractual and technical safeguards, and we
+          only transfer the minimum needed for the service.
         </p>
       </Section>
 
@@ -240,6 +249,14 @@ export function PrivacyPage() {
           <RetentionRow
             what="Account and tracking data"
             how="Until you delete it or delete your account. Deletion is immediate."
+          />
+          <RetentionRow
+            what="DueRadar Plus billing records"
+            how="Until account deletion; only transaction metadata is stored, never card or mobile-money credentials."
+          />
+          <RetentionRow
+            what="DueRadar Plus billing records"
+            how="Until account deletion; only transaction metadata is stored, never card or mobile-money credentials."
           />
           <RetentionRow
             what="Raw imported statements or screenshots"
@@ -418,9 +435,14 @@ export function TermsPage() {
 
       <Section title="7. Fees and changes">
         <p>
-          DueRadar is currently free to use. If we introduce paid plans, we will show the price and
-          billing terms before charging anything, and we will not charge for a period you have already
-          used for free. You will always be able to export and delete your data.
+          The Free plan includes up to five active items and basic reminders. DueRadar Plus includes
+          unlimited active items and email import. Plus is available for GHS 9.99 per month or
+          GHS 99 per year, paid in advance through Paystack hosted checkout. Each purchase is a
+          one-time payment for the selected term; there is no automatic renewal. You can renew
+          manually, and any unused paid access is added to the new term. Accounts existing when
+          paid plans launched keep their grandfathered Plus access. Refund requests are reviewed
+          case by case under applicable law; contact support. We show the price and term before
+          checkout. You can export and delete your data at any time.
         </p>
         <p>
           We may update these terms. Material changes will be announced in the app or by email before

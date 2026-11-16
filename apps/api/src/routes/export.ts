@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import {
+  billingTransactions,
   billingOccurrences,
   categories,
   detectionSuggestions,
@@ -34,6 +35,7 @@ export async function registerExportRoutes(
       subscriptionRows,
       occurrenceRows,
       paymentRows,
+      billingRows,
       categoryRows,
       methodRows,
       notificationRows,
@@ -46,6 +48,10 @@ export async function registerExportRoutes(
       db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)),
       db.select().from(billingOccurrences).where(eq(billingOccurrences.userId, user.id)),
       db.select().from(payments).where(eq(payments.userId, user.id)),
+      db
+        .select()
+        .from(billingTransactions)
+        .where(eq(billingTransactions.userId, user.id)),
       db.select().from(categories).where(eq(categories.userId, user.id)),
       db.select().from(paymentMethods).where(eq(paymentMethods.userId, user.id)),
       db.select().from(notifications).where(eq(notifications.userId, user.id)),
@@ -62,11 +68,12 @@ export async function registerExportRoutes(
     const payload = {
       exportedAt: new Date().toISOString(),
       app: "DueRadar",
-      schemaVersion: 2,
+      schemaVersion: 3,
       profile,
       subscriptions: subscriptionRows,
       occurrences: occurrenceRows,
       payments: paymentRows,
+      billingTransactions: billingRows,
       categories: categoryRows,
       paymentMethods: methodRows,
       notifications: notificationRows,

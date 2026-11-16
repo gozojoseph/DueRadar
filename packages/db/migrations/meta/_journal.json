@@ -22,6 +22,13 @@
       "when": 1794790592781,
       "tag": "0002_common_hobgoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794856414633,
+      "tag": "0003_wide_meltdown",
+      "breakpoints": true
     }
   ]
 }

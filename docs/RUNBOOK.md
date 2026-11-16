@@ -1,7 +1,7 @@
 # DueRadar production runbook
 
 Operational procedures for the Render web service, the reminder worker, Neon Postgres, Neon Auth,
-Resend and web push. Keep this file current whenever infrastructure or a secret changes.
+Resend, Paystack and web push. Keep this file current whenever infrastructure or a secret changes.
 
 ## 1. Service map
 
@@ -21,14 +21,16 @@ services start migrations under advisory lock `728_491_002`.
 
 - [ ] `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build` pass locally or in CI.
 - [ ] Any schema change has a generated migration in `packages/db/migrations/` and was reviewed.
-- [ ] New environment variables are present in both Render services, not just the web service.
-  Phase 2 requires `INBOUND_EMAIL_DOMAIN` and `DETECTION_RAW_RETENTION_HOURS` on both; the worker
-  purges expired raw text, so a missing worker variable would leave the wrong retention window.
+- [ ] New environment variables are set on the service that consumes them. The API needs
+  `PAYSTACK_SECRET_KEY`; both web and worker need `INBOUND_EMAIL_DOMAIN` and
+  `DETECTION_RAW_RETENTION_HOURS` because the worker purges expired raw text.
 - [ ] The target Neon branch is the intended one (production vs staging), with a recent restore point.
 - [ ] Resend sending domain and DNS records are verified; the API key has the least permissions that
   still allow sending and reading received email. A leaked full-access key must be rotated.
 - [ ] If forwarding is enabled, the receiving domain shows verified and the `email.received` webhook
   is active with the current signing secret.
+- [ ] For paid checkout, configure the Paystack secret on the Render web service and create a
+  Paystack webhook for `https://app.dueradar.cloud/api/webhooks/paystack`.
 - [ ] `APP_ORIGIN` matches the hostname users will open, and that origin is trusted in Neon Auth.
 - [ ] `render.yaml` and the Render dashboard agree on plans, regions and commands.
 
@@ -157,13 +159,38 @@ the wrong anchor, correct it in the record form; do not edit detection rows by h
 If the body was fetched but unreadable, the import says `no_readable_text`; ask the user to paste the
 text instead rather than loosening the size or attachment rules.
 
-## 8. Secrets and rotation
+## 8. Paystack billing
+
+Plus checkout is a manually renewed, one-time purchase: GHS 9.99 for one month or GHS 99 for twelve
+months. It never creates an automatic recurring charge. Renewal extends any unexpired paid term;
+existing grandfathered accounts keep lifetime Plus and should not be asked to pay.
+
+1. Create/activate the DueRadar merchant account in Paystack and confirm that the account supports
+   the payment methods and settlement arrangements intended for launch.
+2. Set `PAYSTACK_SECRET_KEY` only on the Render web/API service. Never add it to the frontend,
+   worker, repository, chat or logs. `.env.example` contains only an empty placeholder.
+3. In Paystack, configure a webhook pointing to `https://app.dueradar.cloud/api/webhooks/paystack`.
+   Use the secret key configured for the account in Render as `PAYSTACK_SECRET_KEY`; do not invent a
+   separate webhook secret.
+4. Deploy and test with Paystack test mode on staging. Confirm successful verification activates the
+   expected term, while an altered signature, wrong amount/currency, failed transaction, duplicate
+   webhook and another user's reference do not grant access.
+5. Before live charges, confirm Paystack's contracting entity, processing locations, refund handling
+   and merchant terms; update `docs/DPC.md` and the privacy/terms copy if those facts differ.
+
+The browser return to Settings is not proof of payment. The API verifies every reference with
+Paystack; the signed webhook does the same. A payment remains pending until provider verification
+succeeds. Investigate pending references in Paystack and the `billing_transactions` row; do not
+manually set a profile to Plus to work around an uncertain payment.
+
+## 9. Secrets and rotation
 
 | Secret                  | Rotation impact                                                        |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `DATABASE_URL` password | Update Neon role password, then both Render services; old connections drain |
 | `RESEND_API_KEY`        | Update web + worker + Neon Auth SMTP; confirm it can send and read received email; send a test |
 | `RESEND_WEBHOOK_SECRET` | Update Render and the Resend webhook endpoint together; old signatures stop verifying |
+| `PAYSTACK_SECRET_KEY` | Update Render and the Paystack webhook configuration together; old signatures and API credentials stop verifying |
 | `INBOUND_EMAIL_DOMAIN`  | Changing the domain changes every future address; existing aliases keep their stored address |
 | `DETECTION_LLM_API_KEY` | Only used when the fallback is enabled; rotate at the provider and update Render |
 | VAPID key pair          | Rotating invalidates every existing browser subscription; users must re-enable push |
@@ -172,7 +199,7 @@ text instead rather than loosening the size or attachment rules.
 Store secrets only in Render's encrypted environment variables and the provider dashboards. Never
 paste them into issues, chat, logs or the repository. `.env.local` is for local development only.
 
-## 9. Monitoring
+## 10. Monitoring
 
 Minimum weekly checks:
 
@@ -181,6 +208,8 @@ Minimum weekly checks:
 - Worker `Reminder delivery failed` and `Maintenance failed` entries.
 - Neon connection count, storage, and slow queries.
 - Resend bounce/complaint rates and inbound webhook failures.
+- Paystack webhook/API failures, pending billing transactions, and mismatches between verified
+  transactions and active Plus terms.
 - Import failures: count of `imports.status = 'failed'` in the last 24 hours, and rows still holding
   raw text past `raw_retention_until`. A non-zero overdue count means the worker cleanup is not running.
 - Auth failures: `INVALID_ORIGIN`, `MISSING_ORIGIN`, `INVALID_HOSTNAME`, unexpected 5xx.
@@ -188,7 +217,7 @@ Minimum weekly checks:
 There is no third-party analytics or advertising pixel. Do not add one without updating the privacy
 notice and, where required, obtaining consent.
 
-## 10. Incident response
+## 11. Incident response
 
 1. **Contain.** Suspend the worker or roll back the web service if the incident involves outbound
    reminders, auth or data exposure. Revoke a leaked secret at the provider before anything else.
@@ -206,7 +235,7 @@ notice and, where required, obtaining consent.
 For a suspected account compromise: revoke sessions, reset the password, review audit events, and
 check device registrations. Account deletion remains available even during support disputes.
 
-## 11. Data subject requests
+## 12. Data subject requests
 
 - The statutory response deadline is **40 days** from receipt (Act 843 s.35(5)). Log the request date
   and due date immediately. The full procedure is in `docs/DPC.md` section 6.
@@ -222,7 +251,7 @@ check device registrations. Account deletion remains available even during suppo
   for passwords, OTPs or card data.
 - Log the request and outcome without storing the user's bill contents in the support system.
 
-## 12. M0 and Phase 2 acceptance gates
+## 13. M0 and Phase 2 acceptance gates
 
 Run the M0 gate on production or staging with real devices, then the Phase 2 gate with fixtures or a
 staging account. Record the date, build/commit, devices and result.
@@ -258,7 +287,7 @@ staging account. Record the date, build/commit, devices and result.
 - [ ] Raw text, subject and sender disappear after the retention window; suggestions remain.
 - [ ] Rollback was rehearsed once on staging.
 
-## 13. Known limits
+## 14. Known limits
 
 - No social login and no two-factor authentication yet.
 - Detection is deterministic and English-first. Unusual formats, non-English receipts and images with

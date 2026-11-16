@@ -47,6 +47,7 @@ const EnvSchema = z.object({
   NEON_AUTH_AUDIENCE: z.string().optional(),
   COOKIE_SECURE: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  PAYSTACK_SECRET_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("DueRadar <reminders@dueradar.cloud>"),
   SUPPORT_EMAIL: z.string().default("support@dueradar.cloud"),
   VAPID_PUBLIC_KEY: z.string().optional(),

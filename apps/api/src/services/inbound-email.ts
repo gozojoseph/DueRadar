@@ -9,6 +9,7 @@ import {
   type MessageImportResult,
 } from "./detection.js";
 import type { DraftEnhancer } from "./llm-detect.js";
+import { getPlanAccess } from "./plan.js";
 import {
   extractEmailAddresses,
   findActiveAlias,
@@ -235,6 +236,26 @@ export async function processInboundEmail(
     aliasId: alias.id,
     attachmentCount: 0,
   };
+
+  const plan = await getPlanAccess(db, alias.userId);
+  if (!plan.canUseEmailImport) {
+    const failed = await createFailedImport(db, alias.userId, {
+      source: "email",
+      error: "plus_required",
+      subject: data.subject ?? null,
+      fromAddress: data.from ?? null,
+      messageId: fallbackMessageId,
+      metadata: { ...metadata, reason: "plus_required" },
+      retentionHours: env.DETECTION_RAW_RETENTION_HOURS,
+    });
+    await touchAlias(db, alias.id);
+    return {
+      outcome: "failed",
+      reason: "plus_required",
+      importId: failed.id,
+      userId: alias.userId,
+    };
+  }
 
   const [existing] = await db
     .select({ id: imports.id })

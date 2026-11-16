@@ -34,6 +34,10 @@ export function conflict(message: string, details?: unknown): ApiError {
   return new ApiError(409, "conflict", message, details);
 }
 
+export function paymentRequired(message: string, details?: unknown): ApiError {
+  return new ApiError(402, "upgrade_required", message, details);
+}
+
 export function tooMany(message = "Too many requests. Try again later."): ApiError {
   return new ApiError(429, "rate_limited", message);
 }
