@@ -43,6 +43,13 @@
       "when": 1794860879476,
       "tag": "0005_silky_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794869213687,
+      "tag": "0006_green_marvel_apes",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,7 @@ import {
   usePaymentMethods,
   useRejectAllDetections,
   useRejectDetection,
+  useUndoAutoTrackedDetection,
 } from "../lib/queries";
 import { errorMessage } from "../lib/api";
 import { cycleLabel, longDate, money, shortDate, timeAgo } from "../lib/format";
@@ -101,6 +102,7 @@ function sourceLabel(suggestion: DetectionSuggestion): string {
   const names: Record<string, string> = {
     paste: "Pasted text",
     email: "Forwarded email",
+    gmail: "Gmail",
     csv: "CSV import",
     ocr: "Screenshot text",
     upload: "Uploaded text",
@@ -155,7 +157,7 @@ export function DetectionsPage() {
       <PageHeader
         eyebrow="Review inbox"
         title="Detected payments"
-        description="Everything found in a forwarded email, pasted message, or statement waits here. Nothing becomes a reminder until you confirm it."
+        description="Message finds wait for review. Strong recurring patterns from statements are tracked automatically, and you can undo them here."
         actions={
           <>
             <Link to="/import">
@@ -234,7 +236,7 @@ export function DetectionsPage() {
           title={tab === "pending" ? "Nothing waiting for review" : "Nothing here yet"}
           description={
             tab === "pending"
-              ? "Forward a receipt to your DueRadar address, paste a message, or import a statement. New finds appear here for approval."
+              ? "Forward a receipt, paste a message, or import a statement. Message finds and candidates you choose not to auto-track appear here."
               : "Items you review will be listed here."
           }
           action={
@@ -434,6 +436,18 @@ function BlockedCard({
 
 function ResolvedCard({ suggestion }: { suggestion: DetectionSuggestion }) {
   const accepted = suggestion.status === "accepted";
+  const undo = useUndoAutoTrackedDetection();
+  const toast = useToast();
+
+  async function undoAutoTrack() {
+    try {
+      await undo.mutateAsync(suggestion.id);
+      toast("Automatic tracking undone. The candidate is back in your review inbox.", "info");
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
   return (
     <Card className="flex flex-wrap items-center gap-3 p-4">
       <span
@@ -449,10 +463,25 @@ function ResolvedCard({ suggestion }: { suggestion: DetectionSuggestion }) {
           {suggestion.draft.merchant ?? "Unknown merchant"} · {amountText(suggestion)}
         </p>
         <p className="text-xs text-muted">
-          {accepted ? "Saved to tracked items" : "Dismissed"} ·{" "}
+          {accepted
+            ? suggestion.autoTracked
+              ? "Automatically tracked"
+              : "Saved to tracked items"
+            : "Dismissed"}{" "}
+          ·{" "}
           {suggestion.resolvedAt ? timeAgo(suggestion.resolvedAt) : timeAgo(suggestion.createdAt)}
         </p>
       </div>
+      {accepted && suggestion.autoTracked ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void undoAutoTrack()}
+          loading={undo.isPending}
+        >
+          Undo
+        </Button>
+      ) : null}
       {accepted && suggestion.acceptedSubscriptionId ? (
         <Link
           to={`/subscriptions/${suggestion.acceptedSubscriptionId}`}

@@ -24,6 +24,10 @@ services start migrations under advisory lock `728_491_002`.
 - [ ] New environment variables are set on the service that consumes them. The API needs
   `PAYSTACK_SECRET_KEY`; both web and worker need `INBOUND_EMAIL_DOMAIN` and
   `DETECTION_RAW_RETENTION_HOURS` because the worker purges expired raw text.
+- [ ] Gmail is optional. Before enabling it, complete Google's restricted-scope verification and
+  any required security assessment; set `GMAIL_OAUTH_CLIENT_ID`,
+  `GMAIL_OAUTH_CLIENT_SECRET` and a stable base64-encoded 32-byte
+  `PROVIDER_TOKEN_ENCRYPTION_KEY` on the Render web service only.
 - [ ] The target Neon branch is the intended one (production vs staging), with a recent restore point.
 - [ ] Resend sending domain and DNS records are verified; the API key has the least permissions that
   still allow sending and reading received email. A leaked full-access key must be rotated.
@@ -33,6 +37,37 @@ services start migrations under advisory lock `728_491_002`.
   Paystack webhook for `https://app.dueradar.cloud/api/webhooks/paystack`.
 - [ ] `APP_ORIGIN` matches the hostname users will open, and that origin is trusted in Neon Auth.
 - [ ] `render.yaml` and the Render dashboard agree on plans, regions and commands.
+
+### Optional Gmail setup
+
+1. In Google Cloud, create/select a project, enable the Gmail API, configure the OAuth consent
+   screen, and create an OAuth client ID for a Web application.
+2. Register exactly `https://app.dueradar.cloud/oauth/gmail/callback` as an authorized redirect URI.
+   For another deployment, use `${APP_ORIGIN}/oauth/gmail/callback` with that deployment's exact
+   origin.
+3. Configure the `gmail.readonly` restricted scope. Add test users while the OAuth consent screen is
+   in Testing. Google's testing refresh tokens may expire after seven days.
+4. Google requires verification before broad public use of restricted scopes. Server-side handling
+   of restricted-scope data may require an independent security assessment. See Google's
+   [OAuth verification guidance](https://support.google.com/cloud/answer/13463073) and
+   [restricted-scope policy](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification).
+5. Only after approval, set `GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET` and
+   `PROVIDER_TOKEN_ENCRYPTION_KEY` in the Render web service. Generate the encryption key locally:
+
+   ```bash
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+   ```
+
+   Do not paste the client secret or encryption key into tickets, source control or chat. Back up
+   the encryption key securely and keep it stable: changing it makes existing Gmail connections
+   unreadable, requiring users to reconnect.
+6. Deploy the application and migration, then test with a designated Google test account: connect,
+   scan manually, review the suggestions, disconnect, and verify that the connection is revoked.
+
+The Gmail integration requests read-only access, scans only when the user asks, and handles at most
+25 matching messages in a batch from the preceding year. Imported message text is redacted and
+purged within 72 hours; tokens are encrypted at rest and cleared on disconnect. Do not enable
+background scanning.
 
 ## 3. Deploy
 
@@ -159,9 +194,11 @@ domain pattern. Revocation does the same. Mail already forwarded is unaffected a
 if it arrives before the revocation commits.
 
 **Detection review.** Imported messages create drafts only; nothing becomes a record until accepted in
-`/detections`. If the review inbox shows a suggestion with a blocked reason, it is a refund, decline,
-card check, transfer or other non-charge and must not be saved as a bill. If an accepted record has
-the wrong anchor, correct it in the record form; do not edit detection rows by hand.
+`/detections`. A strong recurring pattern from CSV imports is the exception: it is tracked
+automatically and can be undone from Saved or the review inbox. If the review inbox shows a
+suggestion with a blocked reason, it is a refund, decline, card check, transfer or other non-charge
+and must not be saved as a bill. If an accepted record has the wrong anchor, correct it in the
+record form; do not edit detection rows by hand.
 
 **Diagnosing a missing forward.** Check, in order: the address shown in the app matches
 `INBOUND_EMAIL_DOMAIN`; the Resend receiving domain is verified; the webhook delivery log shows a

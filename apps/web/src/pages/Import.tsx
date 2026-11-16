@@ -39,11 +39,15 @@ import {
   useBillingPlan,
   useCsvImport,
   useCsvPreview,
+  useDisconnectGmail,
   useDeleteImport,
   useEmailAlias,
+  useGmailConnection,
   useImportHistory,
   useImportMessage,
   useRevokeEmailAlias,
+  useStartGmailConnection,
+  useSyncGmail,
 } from "../lib/queries";
 import { errorMessage } from "../lib/api";
 import { money, shortDate, timeAgo } from "../lib/format";
@@ -56,7 +60,7 @@ import type {
 } from "../lib/types";
 import { kindTone } from "./Detections";
 
-type Tab = "paste" | "email" | "csv" | "screenshot";
+type Tab = "paste" | "email" | "gmail" | "csv" | "screenshot";
 type ImportResult = MessageImportResult | CsvImportResult;
 
 const DATE_FORMATS: Array<{ value: CsvMapping["dateFormat"]; label: string }> = [
@@ -71,6 +75,7 @@ const CURRENCIES = ["GHS", "USD", "EUR", "GBP", "NGN", "ZAR", "KES", "XOF", "CAD
 const SOURCE_LABELS: Record<string, string> = {
   paste: "Pasted text",
   email: "Forwarded email",
+  gmail: "Gmail",
   csv: "CSV import",
   ocr: "Screenshot text",
   upload: "Uploaded text",
@@ -78,7 +83,9 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export function ImportPage() {
-  const [tab, setTab] = useState<Tab>("paste");
+  const [tab, setTab] = useState<Tab>(() =>
+    new URLSearchParams(window.location.search).get("tab") === "gmail" ? "gmail" : "paste",
+  );
   const [result, setResult] = useState<ImportResult | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const plan = useBillingPlan();
@@ -93,7 +100,7 @@ export function ImportPage() {
       <PageHeader
         eyebrow="Import"
         title="Bring in what you already paid"
-        description="Paste a receipt, forward a confirmation email, import a statement, or read a screenshot on this device. DueRadar suggests what it found; you decide what to track."
+        description="Paste a receipt, forward a confirmation email, import a statement, or read a screenshot on this device. Message finds wait for review; strong recurring statement patterns are tracked automatically and can be undone."
         actions={
           <Link to="/detections">
             <Button variant="secondary">
@@ -127,7 +134,8 @@ export function ImportPage() {
             }}
             options={[
               { value: "paste", label: "Paste" },
-              { value: "email", label: "Email" },
+              { value: "email", label: "Forward email" },
+              { value: "gmail", label: "Gmail" },
               { value: "csv", label: "CSV" },
               { value: "screenshot", label: "Screenshot" },
             ]}
@@ -138,6 +146,7 @@ export function ImportPage() {
 
           {tab === "paste" ? <PasteTab onResult={showResult} /> : null}
           {tab === "email" ? <EmailTab /> : null}
+          {tab === "gmail" ? <GmailTab /> : null}
           {tab === "csv" ? <CsvTab onResult={showResult} /> : null}
           {tab === "screenshot" ? <ScreenshotTab onResult={showResult} /> : null}
         </>
@@ -154,7 +163,8 @@ export function ImportPage() {
           <div className="grid gap-2 sm:grid-cols-2">
             {[
               { label: "Paste", icon: ClipboardPaste },
-              { label: "Email", icon: Mail },
+              { label: "Forward email", icon: Mail },
+              { label: "Gmail", icon: Mail },
               { label: "CSV", icon: FileSpreadsheet },
               { label: "Screenshot", icon: Camera },
             ].map(({ label, icon: Icon }) => (
@@ -204,7 +214,7 @@ function ImportResultCard({
             <p className="text-sm font-semibold text-ink">{result.summary.message}</p>
             <p className="mt-0.5 text-xs text-muted">
               {isCsvResult(result)
-                ? `${result.summary.transactions} rows read · ${result.summary.duplicates} duplicates · ${result.summary.errors.length} row errors`
+                ? `${result.summary.transactions} rows read · ${result.summary.duplicates} duplicates · ${result.summary.errors.length} row errors · ${result.summary.autoTracked} auto-tracked`
                 : `${result.summary.detected} found · ${result.summary.actionable} to review · ${result.summary.blocked} not a charge`}
             </p>
           </div>
@@ -226,6 +236,8 @@ function ImportResultCard({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge tone={kindTone(suggestion.draft.kind)}>{suggestion.draft.kind}</Badge>
+                  {suggestion.autoTracked ? <Badge tone="brand">Auto-tracked</Badge> : null}
+                  {suggestion.autoTrackIgnored ? <Badge tone="amber">Review before tracking</Badge> : null}
                   {suggestion.needsDetails ? <Badge tone="amber">Needs a date</Badge> : null}
                   {!suggestion.actionable ? <Badge tone="slate">Not a charge</Badge> : null}
                 </div>
@@ -237,17 +249,23 @@ function ImportResultCard({
                 </p>
                 <p className="text-xs text-muted">
                   {suggestion.blockedReason ??
-                    (suggestion.needsDetails
-                      ? "Open the review inbox to add the missing date."
-                      : "Ready for your confirmation.")}
+                    (suggestion.autoTracked
+                      ? "Tracked automatically. Undo it from the Saved list."
+                      : suggestion.needsDetails
+                        ? "Open the review inbox to add the missing date."
+                        : "Ready for your confirmation.")}
                 </p>
               </div>
               {suggestion.actionable ? (
                 <Link
-                  to="/detections"
+                  to={
+                    suggestion.acceptedSubscriptionId
+                      ? `/subscriptions/${suggestion.acceptedSubscriptionId}`
+                      : "/detections"
+                  }
                   className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
                 >
-                  Review
+                  {suggestion.acceptedSubscriptionId ? "Open" : "Review"}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null}
@@ -256,10 +274,154 @@ function ImportResultCard({
         </ul>
       ) : (
         <div className="px-4 py-4 text-sm text-muted sm:px-5">
-          Nothing was created automatically. You can still add a record by hand.
+          No new candidates were tracked. You can still add a record by hand.
         </div>
       )}
     </Card>
+  );
+}
+
+function GmailTab() {
+  const connection = useGmailConnection();
+  const connect = useStartGmailConnection();
+  const sync = useSyncGmail();
+  const disconnect = useDisconnectGmail();
+  const toast = useToast();
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const redirectUri = `${window.location.origin}/oauth/gmail/callback`;
+
+  async function connectGmail() {
+    try {
+      const { authorizationUrl } = await connect.mutateAsync();
+      window.location.assign(authorizationUrl);
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
+  async function scanGmail() {
+    try {
+      const result = await sync.mutateAsync();
+      toast(result.message, result.imported > 0 ? "success" : "info");
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
+  async function disconnectGmail() {
+    try {
+      const result = await disconnect.mutateAsync();
+      setConfirmDisconnect(false);
+      toast(
+        result.revokeWarning ?? "Gmail disconnected. DueRadar removed its saved access.",
+        result.revokeWarning ? "error" : "success",
+      );
+    } catch (error) {
+      toast(errorMessage(error), "error");
+    }
+  }
+
+  if (connection.isLoading) return <LoadingBlock label="Checking Gmail connection" />;
+  if (connection.isError || !connection.data) {
+    return (
+      <Note tone="error">
+        Could not load Gmail connection status. {errorMessage(connection.error)}
+      </Note>
+    );
+  }
+
+  const status = connection.data;
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 sm:p-6">
+        <div className="mb-4 flex items-start gap-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+            <Mail className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="text-base font-semibold text-ink">Connect Gmail read-only</h2>
+            <p className="text-xs leading-relaxed text-muted">
+              Manually scan matching billing messages from the last year. Each scan handles up to
+              25 messages; run another batch to continue. DueRadar cannot send, delete, or change
+              your email.
+            </p>
+          </div>
+        </div>
+
+        <Note tone="warn">
+          Google classifies Gmail read-only as a restricted scope. Google verification is needed
+          before this can be offered broadly; server-side processing can also require a security
+          assessment. The connection scans billing-related search results, not your whole inbox for
+          reminders.
+        </Note>
+
+        {status.connected ? (
+          <div className="mt-4 rounded-2xl border border-line bg-surface/70 p-4">
+            <p className="text-sm font-semibold text-ink">Connected as {status.emailAddress}</p>
+            <p className="mt-1 text-xs text-muted">
+              Read-only access
+              {status.lastSyncedAt ? ` · Last scanned ${timeAgo(status.lastSyncedAt)}` : ""}
+              {status.hasMore ? " · More matching messages are available" : ""}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button onClick={() => void scanGmail()} loading={sync.isPending}>
+                <RefreshCw className="h-4 w-4" />
+                {status.hasMore ? "Scan next batch" : "Scan Gmail"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setConfirmDisconnect(true)}
+                loading={disconnect.isPending}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ) : status.configured ? (
+          <Button className="mt-4" onClick={() => void connectGmail()} loading={connect.isPending}>
+            <ShieldCheck className="h-4 w-4" />
+            Connect Google account
+          </Button>
+        ) : (
+          <div className="mt-4 space-y-2 rounded-2xl border border-line bg-surface/70 p-4 text-xs text-muted">
+            <p>Gmail OAuth is not configured for this environment yet.</p>
+            <p>
+              Add <code>GMAIL_OAUTH_CLIENT_ID</code>, <code>GMAIL_OAUTH_CLIENT_SECRET</code>, and{" "}
+              <code>PROVIDER_TOKEN_ENCRYPTION_KEY</code> to the API service's secret environment.
+            </p>
+            <p>
+              Register this exact redirect URI in Google Cloud:{" "}
+              <code className="break-all">{redirectUri}</code>
+            </p>
+          </div>
+        )}
+
+        {status.status === "error" ? (
+          <Note className="mt-4" tone="warn">
+            Gmail needs to be reconnected before it can be scanned.
+          </Note>
+        ) : null}
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <h3 className="text-sm font-semibold text-ink">What happens to scanned messages</h3>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Matching messages are passed through DueRadar's existing receipt detector. Raw message
+          text is redacted and erased within 72 hours; resulting suggestions stay in your account
+          until you dismiss or delete them. No email is sent from your Gmail account.
+        </p>
+      </Card>
+
+      <ConfirmDialog
+        open={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={() => void disconnectGmail()}
+        title="Disconnect Gmail?"
+        description="DueRadar will delete its saved Gmail tokens and stop scanning. Previously imported suggestions remain in your account."
+        confirmLabel="Disconnect Gmail"
+        loading={disconnect.isPending}
+      />
+    </div>
   );
 }
 
@@ -599,7 +761,7 @@ function CsvTab({ onResult }: { onResult: (result: CsvImportResult) => void }) {
             <h2 className="text-base font-semibold text-ink">Import a bank or MoMo statement</h2>
             <p className="text-xs leading-relaxed text-muted">
               CSV only, up to 2 MB and 5,000 rows. We look for three or more matching charges before
-              suggesting a subscription. The file itself is never stored.
+              automatically tracking a subscription. You can undo it from the Saved list. The file itself is never stored.
             </p>
           </div>
         </div>

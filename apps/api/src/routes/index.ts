@@ -18,6 +18,7 @@ import { registerNotificationRoutes } from "./notifications.js";
 import { registerOccurrenceRoutes } from "./occurrences.js";
 import { registerPaymentMethodRoutes } from "./payment-methods.js";
 import { registerProfileRoutes } from "./profile.js";
+import { registerProviderRoutes } from "./providers.js";
 import { registerSubscriptionRoutes } from "./subscriptions.js";
 import { registerTestRoutes } from "./test.js";
 import { registerWebhookRoutes } from "./webhooks.js";
@@ -44,6 +45,7 @@ export async function registerRoutes(
   await registerOccurrenceRoutes(app, deps);
   await registerImportRoutes(app, deps);
   await registerDetectionRoutes(app, deps);
+  await registerProviderRoutes(app, deps);
   await registerEmailAliasRoutes(app, deps);
   await registerDashboardRoutes(app, deps);
   await registerNotificationRoutes(app, deps);

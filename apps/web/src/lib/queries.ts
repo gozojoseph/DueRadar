@@ -24,6 +24,8 @@ import type {
   Device,
   EmailAliasResponse,
   ImportHistoryItem,
+  GmailConnectionStatus,
+  GmailSyncResult,
   MeResponse,
   MessageImportResult,
   Notification,
@@ -49,6 +51,7 @@ const ALL_KEYS = [
   ["imports"],
   ["importHistory"],
   ["emailAlias"],
+  ["gmailConnection"],
   ["billing"],
 ] as const;
 
@@ -505,6 +508,15 @@ export function useRejectDetection() {
   });
 }
 
+export function useUndoAutoTrackedDetection() {
+  return useRoutineMutation({
+    mutationFn: (id: string) =>
+      api.post<{ suggestion: DetectionSuggestion }>(
+        `/detections/${id}/undo-auto-track`,
+      ),
+  });
+}
+
 export function useRejectAllDetections() {
   return useRoutineMutation({
     mutationFn: (ids?: string[]) =>
@@ -556,6 +568,46 @@ export function useEmailAlias() {
     queryKey: ["emailAlias"],
     queryFn: () => api.get<EmailAliasResponse>("/email-alias"),
     staleTime: 30_000,
+  });
+}
+
+export function useGmailConnection() {
+  return useQuery({
+    queryKey: ["gmailConnection"],
+    queryFn: () => api.get<GmailConnectionStatus>("/providers/gmail/status"),
+    staleTime: 30_000,
+  });
+}
+
+export function useStartGmailConnection() {
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ authorizationUrl: string }>("/providers/gmail/connect"),
+  });
+}
+
+export function useCompleteGmailOAuth() {
+  return useRoutineMutation({
+    mutationFn: (input: { code: string; state: string }) =>
+      api.post<{ connected: boolean; emailAddress: string }>(
+        "/providers/gmail/callback",
+        input,
+      ),
+  });
+}
+
+export function useSyncGmail() {
+  return useRoutineMutation({
+    mutationFn: () => api.post<GmailSyncResult>("/providers/gmail/sync"),
+  });
+}
+
+export function useDisconnectGmail() {
+  return useRoutineMutation({
+    mutationFn: () =>
+      api.delete<{ disconnected: boolean; revokeWarning: string | null }>(
+        "/providers/gmail",
+      ),
   });
 }
 

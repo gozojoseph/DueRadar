@@ -256,7 +256,7 @@ export function AccountPage() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => void deleteAccount()}
         title="Delete your account permanently?"
-        description="Your records, reminders, devices and sign-in credentials will be removed immediately. There is no undo and support cannot restore them."
+        description="Your records, reminders, devices and sign-in credentials will be removed immediately. If you connected Gmail, this also removes DueRadar's saved token; revoke DueRadar in your Google Account settings if you want to remove Google's authorization too. There is no undo and support cannot restore anything."
         confirmLabel="Yes, delete everything"
         cancelLabel="Cancel"
         loading={remove.isPending}

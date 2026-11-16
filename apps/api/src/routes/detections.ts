@@ -18,6 +18,7 @@ import {
   listDetectionSuggestions,
   rejectSuggestion,
   rejectSuggestions,
+  undoAutoTrackedSuggestion,
 } from "../services/detection.js";
 
 const listQuerySchema = z.object({
@@ -128,6 +129,25 @@ export async function registerDetectionRoutes(
         },
       });
       return reply.code(201).send(result);
+    },
+  );
+
+  app.post(
+    "/api/v1/detections/:id/undo-auto-track",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request) => {
+      const user = await requireUser(request, env);
+      const { id } = request.params as { id: string };
+      if (!isUuid(id)) throw notFound("Suggestion not found.");
+      const suggestion = await undoAutoTrackedSuggestion(db, user.id, id);
+      await recordAudit(db, request, {
+        userId: user.id,
+        action: "detection.auto_track_undone",
+        entityType: "detection_suggestion",
+        entityId: id,
+        metadata: { automaticallyTracked: true },
+      });
+      return { suggestion };
     },
   );
 

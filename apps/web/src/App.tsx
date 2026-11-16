@@ -9,6 +9,7 @@ import { useDeferPlanSelection, useMe } from "./lib/queries";
 import { DashboardPage } from "./pages/Dashboard";
 import { DetectionsPage } from "./pages/Detections";
 import { ImportPage } from "./pages/Import";
+import { GmailOAuthCallbackPage } from "./pages/GmailOAuthCallback";
 import { LandingPage } from "./pages/Landing";
 import { OnboardingPage } from "./pages/Onboarding";
 import { SubscriptionsPage } from "./pages/Subscriptions";
@@ -259,6 +260,14 @@ export default function App() {
           element={
             <Protected>
               <ImportPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/oauth/gmail/callback"
+          element={
+            <Protected>
+              <GmailOAuthCallbackPage />
             </Protected>
           }
         />

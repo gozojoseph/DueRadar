@@ -140,7 +140,7 @@ export function PrivacyPage() {
       <LegalHeader
         eyebrow="Privacy notice"
         title="What DueRadar keeps, why, and for how long."
-        intro="DueRadar tracks the dates and amounts you enter. It does not connect to your bank, read your messages, or store card numbers. This notice explains the personal data we do handle."
+        intro="DueRadar tracks the dates and amounts you enter. If you choose to connect Gmail, it uses read-only access to scan billing-related messages you request. DueRadar does not connect to your bank or store card numbers."
       />
 
       <Section title="Who is responsible">
@@ -166,6 +166,8 @@ export function PrivacyPage() {
             "Account data: your name, email address, sign-in identifiers, verification status and password hash. Passwords are salted and hashed by our authentication provider; we never see them in plain text.",
             "Tracking data you enter: names, vendors, amounts, currencies, billing cycles, due dates, trial end dates, categories, payment-method labels, notes and optional links.",
             "Payment log entries: the date, amount, method label and optional reference you record when you mark something paid. These are records of payments you say you made, not payment instructions.",
+            "Gmail connection data, only if you connect it: your Gmail address, encrypted OAuth tokens, scan cursor, and the message identifiers and billing details needed to create import suggestions.",
+            "Gmail message text is redacted before storage and erased within 72 hours. Extracted suggestions and message metadata remain until you delete them or your account.",
             "DueRadar Plus billing data: plan and term, transaction reference, amount, currency, payment status and the email used at hosted checkout. Paystack processes the purchase; we do not receive or store card details or mobile-money PINs.",
             "DueRadar Plus billing data: plan and term, transaction reference, amount, currency, payment status and the email used at hosted checkout. Paystack processes the purchase; we do not receive or store card details or mobile-money PINs.",
             "Reminder preferences: your time zone, preferred reminder time, quiet hours, week start, email and push choices.",
@@ -182,7 +184,7 @@ export function PrivacyPage() {
             "Full card numbers, CVVs, expiry dates or PINs.",
             "Mobile-money PINs or one-time payment codes.",
             "Bank passwords, bank connection credentials or account numbers.",
-            "Access to your email inbox, SMS messages, contacts or photos.",
+            "Gmail access unless you explicitly connect it. The optional Gmail integration requests read-only access; it does not send, delete, or change messages.",
           ]}
         />
         <p>
@@ -199,6 +201,7 @@ export function PrivacyPage() {
             "To create your account, verify your email, sign you in and keep your session secure.",
             "To store the records you add and calculate projected due dates from the schedule you entered.",
             "To send the reminders you asked for by email, push and in-app notification, while respecting quiet hours.",
+            "If you connect Gmail, to search recent billing-related messages and create import suggestions when you choose to scan.",
             "To confirm DueRadar Plus purchases, grant the purchased access term, and prevent duplicate payment processing.",
             "To confirm DueRadar Plus purchases, grant the purchased access term, and prevent duplicate payment processing.",
             "To show your own data back to you and to enforce ownership on every read and write.",
@@ -223,6 +226,7 @@ export function PrivacyPage() {
             "Neon (database and managed authentication) for storage and sign-in. Our primary database region is London, United Kingdom.",
             "Render (application hosting) for the web service and background worker. Our development environment runs in Frankfurt, Germany.",
             "Resend (transactional email) for verification codes, reminder emails and account notices.",
+            "Google (OAuth and Gmail API) when you connect Gmail. Google grants the requested Gmail read-only scope; DueRadar scans matching billing messages only when you start a scan.",
             "Paystack (hosted checkout and payment verification) for DueRadar Plus purchases. Paystack receives the email, amount, currency and transaction reference needed to process the payment; card and mobile-money credentials are entered directly with Paystack.",
             "Paystack (hosted checkout and payment verification) for DueRadar Plus purchases. Paystack receives the email, amount, currency and transaction reference needed to process the payment; card and mobile-money credentials are entered directly with Paystack.",
             "Browser push services operated by Apple, Google and Mozilla for delivering notifications to devices you register.",
@@ -262,6 +266,14 @@ export function PrivacyPage() {
           <RetentionRow
             what="Raw imported statements or screenshots"
             how="At most 72 hours. Extracted text is erased automatically after processing."
+          />
+          <RetentionRow
+            what="Gmail OAuth credentials"
+            how="Encrypted by DueRadar and kept until you disconnect Gmail or delete your account. Disconnect clears the saved token and connection details; deleting your account does not guarantee Google-side authorization is revoked."
+          />
+          <RetentionRow
+            what="Gmail message content"
+            how="Redacted text is erased within 72 hours; extracted suggestions and message metadata remain until you delete them."
           />
           <RetentionRow
             what="Inbound email and webhook payloads"
@@ -439,8 +451,8 @@ export function TermsPage() {
         <p>
           DueRadar's Free plan supports up to five active items and basic reminders. New accounts can
           choose later and track items manually; there is no time-limited free trial. Importing
-          pasted text, forwarded email, CSV statements, or screenshots requires an active Plus plan.
-          Plus includes unlimited active items and all import methods. Plus is available for GHS 9.99
+          pasted text, forwarded email, Gmail scans, CSV statements, or screenshots requires an
+          active Plus plan. Plus includes unlimited active items and all import methods. Plus is available for GHS 9.99
           per month or GHS 99 per year, paid in advance through Paystack hosted checkout. Each
           purchase is a one-time payment for the selected term; there is no automatic renewal. You
           can renew manually, and any unused paid access is added to the new term. Accounts existing
@@ -472,6 +484,9 @@ export function TermsPage() {
       <Section title="9. Termination">
         <p>
           You can delete your account at any time from Settings. Deletion is immediate and permanent.
+          If you connected Gmail, deleting your account removes DueRadar's saved token, but may not
+          revoke Google's authorization. Remove DueRadar from your Google Account's third-party
+          connections if you also want to revoke it.
           We may suspend or end access if these terms are breached or if we are required to by law. If
           we terminate without cause, we will give you an opportunity to export your data first where
           reasonably possible.
@@ -549,6 +564,7 @@ export function SecurityPage() {
           items={[
             "Traffic between your browser and DueRadar is encrypted with TLS.",
             "Our database provider encrypts stored data at rest and restricts access to the application role.",
+            "Gmail OAuth tokens are encrypted by the application with AES-256-GCM before they are stored.",
             "Application secrets, database credentials and email keys live in the hosting provider's encrypted environment storage, never in the repository.",
             "Development and production use separate database branches and separate credentials.",
             "Database migrations run under an advisory lock so two instances cannot race each other.",

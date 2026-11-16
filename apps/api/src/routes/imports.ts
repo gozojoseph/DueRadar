@@ -11,6 +11,7 @@ import {
   csvPreviewSchema,
   importMessageSchema,
 } from "../schemas.js";
+import { ensureProfile } from "../services/profile.js";
 import {
   createCsvImport,
   createMessageImport,
@@ -84,11 +85,13 @@ export async function registerImportRoutes(
     async (request, reply) => {
       const user = await requireUser(request, env);
       const input = parseBody(csvImportSchema, request.body);
+      const profile = await ensureProfile(db, user);
       const result = await createCsvImport(db, user.id, {
         csv: input.csv,
         mapping: input.mapping,
         fileName: input.fileName ?? null,
         retentionHours: env.DETECTION_RAW_RETENTION_HOURS,
+        timeZone: profile.timezone,
       });
       await recordAudit(db, request, {
         userId: user.id,
@@ -99,6 +102,7 @@ export async function registerImportRoutes(
           rows: result.summary.rows,
           transactions: result.summary.transactions,
           candidates: result.summary.candidates,
+          autoTracked: result.summary.autoTracked,
         },
       });
       return reply.code(201).send(result);

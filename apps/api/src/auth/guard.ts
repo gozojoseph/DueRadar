@@ -77,6 +77,12 @@ export function requiresPlusForImport(
   request: Pick<FastifyRequest, "method" | "url">,
 ): boolean {
   const path = request.url.split("?")[0] ?? request.url;
+  if (
+    path === "/api/v1/providers/gmail" ||
+    path.startsWith("/api/v1/providers/gmail/")
+  ) {
+    return true;
+  }
   if (request.method !== "POST") return false;
   return (
     [

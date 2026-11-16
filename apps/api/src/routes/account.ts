@@ -14,6 +14,7 @@ import {
   payments,
   profiles,
   providerConnections,
+  providerOAuthStates,
   reminderJobs,
   subscriptions,
 } from "@dueradar/db/schema";
@@ -80,6 +81,7 @@ export async function registerAccountRoutes(
       await tx.delete(categories).where(eq(categories.userId, user.id));
       await tx.delete(emailAliases).where(eq(emailAliases.userId, user.id));
       await tx.delete(providerConnections).where(eq(providerConnections.userId, user.id));
+      await tx.delete(providerOAuthStates).where(eq(providerOAuthStates.userId, user.id));
       await tx.delete(profiles).where(eq(profiles.userId, user.id));
       await tx.delete(auditEvents).where(eq(auditEvents.userId, user.id));
 

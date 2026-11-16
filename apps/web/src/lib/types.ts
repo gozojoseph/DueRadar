@@ -357,6 +357,8 @@ export interface DetectionSuggestion {
   createdAt: string;
   resolvedAt: string | null;
   draft: DetectionDraft;
+  autoTracked: boolean;
+  autoTrackIgnored: boolean;
   actionable: boolean;
   eligible: boolean;
   needsDetails: boolean;
@@ -459,6 +461,7 @@ export interface CsvImportResult {
     errors: CsvRowError[];
     candidates: number;
     skippedExisting: number;
+    autoTracked: number;
     message: string;
   };
 }
@@ -475,6 +478,23 @@ export interface EmailAliasResponse {
   alias: EmailAlias | null;
   configured: boolean;
   domain: string | null;
+}
+
+export interface GmailConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  status: "active" | "revoked" | "error" | null;
+  emailAddress: string | null;
+  lastSyncedAt: string | null;
+  hasMore: boolean;
+}
+
+export interface GmailSyncResult {
+  imported: number;
+  skippedDuplicates: number;
+  detected: number;
+  hasMore: boolean;
+  message: string;
 }
 
 export interface BillingPlan {

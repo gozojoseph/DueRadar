@@ -2,10 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DetectionSuggestion } from "@dueradar/db/schema";
 import type { Database } from "../src/db.js";
 
-const { createSubscriptionMock, enforcePlanLimitMock, lockPlanMock } = vi.hoisted(() => ({
+const {
+  cancelRemindersMock,
+  createSubscriptionMock,
+  enforcePlanLimitMock,
+  lockPlanMock,
+} = vi.hoisted(() => ({
+  cancelRemindersMock: vi.fn(),
   createSubscriptionMock: vi.fn(),
   enforcePlanLimitMock: vi.fn(),
   lockPlanMock: vi.fn(),
+}));
+
+vi.mock("@dueradar/scheduling", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@dueradar/scheduling")>()),
+  cancelSubscriptionReminders: cancelRemindersMock,
 }));
 
 vi.mock("../src/services/subscriptions.js", async (importOriginal) => ({
@@ -19,7 +30,10 @@ vi.mock("../src/services/plan.js", async (importOriginal) => ({
   lockPlanForUser: lockPlanMock,
 }));
 
-import { acceptSuggestion } from "../src/services/detection.js";
+import {
+  acceptSuggestion,
+  undoAutoTrackedSuggestion,
+} from "../src/services/detection.js";
 
 const suggestionId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -87,6 +101,11 @@ function makeDatabase(initial: DetectionSuggestion): {
             }),
           }),
         }),
+        delete: () => ({
+          where: () => ({
+            returning: async () => [{ id: "subscription-1" }],
+          }),
+        }),
       };
       const result = await callback(tx);
       persisted = staged;
@@ -130,5 +149,54 @@ describe("acceptSuggestion", () => {
     );
 
     expect(getSuggestion()).toMatchObject({ status: "pending", acceptedSubscriptionId: null });
+  });
+
+  it("marks automatically accepted suggestions so they can be undone", async () => {
+    const { db, getSuggestion } = makeDatabase(makeSuggestion());
+    createSubscriptionMock.mockResolvedValue({ id: "subscription-1" });
+
+    const result = await acceptSuggestion(db, userId, suggestionId, {}, "UTC", true);
+
+    expect(getSuggestion().payload).toMatchObject({ autoTracked: true });
+    expect(result.suggestion.autoTracked).toBe(true);
+  });
+
+  it("undoes only auto-tracked suggestions and returns them to review", async () => {
+    const suggestion = {
+      ...makeSuggestion(),
+      status: "accepted" as const,
+      acceptedSubscriptionId: "subscription-1",
+      payload: { ...makeSuggestion().payload, autoTracked: true },
+    };
+    const { db, getSuggestion } = makeDatabase(suggestion);
+    cancelRemindersMock.mockResolvedValue(undefined);
+
+    const result = await undoAutoTrackedSuggestion(db, userId, suggestionId);
+
+    expect(cancelRemindersMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      "subscription-1",
+    );
+    expect(getSuggestion()).toMatchObject({
+      status: "pending",
+      acceptedSubscriptionId: null,
+      payload: { autoTracked: false, autoTrackIgnored: true },
+    });
+    expect(result.autoTracked).toBe(false);
+    expect(result.autoTrackIgnored).toBe(true);
+  });
+
+  it("does not undo a suggestion accepted manually", async () => {
+    const suggestion = {
+      ...makeSuggestion(),
+      status: "accepted" as const,
+      acceptedSubscriptionId: "subscription-1",
+    };
+    const { db } = makeDatabase(suggestion);
+
+    await expect(
+      undoAutoTrackedSuggestion(db, userId, suggestionId),
+    ).rejects.toThrow("Only automatically tracked items can be undone here.");
+    expect(cancelRemindersMock).not.toHaveBeenCalled();
   });
 });

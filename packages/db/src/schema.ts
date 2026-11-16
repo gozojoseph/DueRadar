@@ -454,6 +454,21 @@ export const providerConnections = pgTable(
   ],
 );
 
+export const providerOAuthStates = pgTable(
+  "provider_oauth_states",
+  {
+    stateHash: text("state_hash").primaryKey(),
+    userId: text("user_id").notNull(),
+    provider: text("provider").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamps.createdAt,
+  },
+  (table) => [
+    index("provider_oauth_states_user_provider_idx").on(table.userId, table.provider),
+    index("provider_oauth_states_expiry_idx").on(table.expiresAt),
+  ],
+);
+
 export const webhookEvents = pgTable(
   "webhook_events",
   {

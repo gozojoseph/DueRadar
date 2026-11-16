@@ -52,6 +52,13 @@ services:
         sync: false
       - key: INBOUND_EMAIL_DOMAIN
         sync: false
+      # Optional Gmail OAuth. Enable only after Google restricted-scope approval.
+      - key: GMAIL_OAUTH_CLIENT_ID
+        sync: false
+      - key: GMAIL_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: PROVIDER_TOKEN_ENCRYPTION_KEY
+        sync: false
       - key: DETECTION_RAW_RETENTION_HOURS
         value: "72"
       - key: VAPID_PUBLIC_KEY

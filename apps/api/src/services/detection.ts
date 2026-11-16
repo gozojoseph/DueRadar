@@ -31,6 +31,7 @@ import {
   type RecurringCandidate,
   type RecurringTransaction,
 } from "@dueradar/detection";
+import { cancelSubscriptionReminders } from "@dueradar/scheduling";
 import { badRequest, conflict, notFound } from "../lib/errors.js";
 import type { Database } from "../db.js";
 import { createSubscription, type SubscriptionInput } from "./subscriptions.js";
@@ -70,6 +71,8 @@ export function redactSenderAddress(value: string): string {
 export interface SuggestionPayload extends DetectionDraft {
   /** Prior successful charges behind a CSV recurring candidate, newest last. */
   transactions?: RecurringTransaction[];
+  autoTracked?: boolean;
+  autoTrackIgnored?: boolean;
 }
 
 export interface ImportDto {
@@ -98,6 +101,8 @@ export interface SuggestionDto {
   createdAt: Date;
   resolvedAt: Date | null;
   draft: SuggestionPayload;
+  autoTracked: boolean;
+  autoTrackIgnored: boolean;
   actionable: boolean;
   eligible: boolean;
   needsDetails: boolean;
@@ -114,7 +119,7 @@ export interface SuggestionDto {
 export function toImportDto(row: Import): ImportDto {
   return {
     id: row.id,
-    source: row.source,
+    source: displayImportSource(row.source, row.metadata),
     status: row.status,
     subject: row.subject,
     fromAddress: row.fromAddress,
@@ -126,6 +131,13 @@ export function toImportDto(row: Import): ImportDto {
     rawRetentionUntil: row.rawRetentionUntil,
     rawTextExpired: row.rawText === null,
   };
+}
+
+function displayImportSource(
+  source: string,
+  metadata: Record<string, unknown> | null | undefined,
+): string {
+  return source === "email" && metadata?.provider === "gmail" ? "gmail" : source;
 }
 
 function draftPayload(row: DetectionSuggestion): SuggestionPayload {
@@ -165,7 +177,8 @@ export function toSuggestionDto(
     createdAt: Date;
   } | null,
 ): SuggestionDto {
-  const draft = draftPayload(row);
+  const payload = draftPayload(row);
+  const { autoTracked, autoTrackIgnored, ...draft } = payload;
   const blocked = blockedReason(draft);
   return {
     id: row.id,
@@ -178,6 +191,8 @@ export function toSuggestionDto(
     createdAt: row.createdAt,
     resolvedAt: row.resolvedAt,
     draft,
+    autoTracked: autoTracked === true,
+    autoTrackIgnored: autoTrackIgnored === true,
     actionable: blocked === null,
     eligible: draft.eligible,
     needsDetails: blocked === null && !draft.eligible,
@@ -248,12 +263,17 @@ async function persistDrafts(
       .limit(1);
     if (!existing) continue;
     if (existing.status === "pending") {
+      const existingPayload = draftPayload(existing);
+      const nextPayload: SuggestionPayload = {
+        ...payload,
+        autoTrackIgnored: existingPayload.autoTrackIgnored === true,
+      };
       const [updated] = await db
         .update(detectionSuggestions)
         .set({
           importId,
           kind: entry.draft.kind,
-          payload: payload as unknown as Record<string, unknown>,
+          payload: nextPayload as unknown as Record<string, unknown>,
           confidence: Math.round(entry.draft.confidence),
         })
         .where(eq(detectionSuggestions.id, existing.id))
@@ -420,7 +440,7 @@ export async function createMessageImport(
 function sourceFor(row: Import) {
   return {
     id: row.id,
-    source: row.source,
+    source: displayImportSource(row.source, row.metadata),
     subject: row.subject,
     fromAddress: row.fromAddress,
     createdAt: row.createdAt,
@@ -579,6 +599,7 @@ export interface CsvImportResult {
     errors: CsvRowError[];
     candidates: number;
     skippedExisting: number;
+    autoTracked: number;
     message: string;
   };
 }
@@ -592,6 +613,7 @@ export async function createCsvImport(
     fileName?: string | null;
     retentionHours?: number;
     now?: Date;
+    timeZone: string;
   },
 ): Promise<CsvImportResult> {
   const prepared = prepareCsv({ csv: input.csv, mapping: input.mapping });
@@ -664,18 +686,65 @@ export async function createCsvImport(
     drafts,
   );
 
-  const message =
-    suggestions.length > 0
-      ? `${suggestions.length} recurring ${suggestions.length === 1 ? "charge" : "charges"} found. Check the dates before saving.`
-      : !hasUsableRows
-        ? "No usable rows were found. Check the column mapping and date format."
-        : skippedExisting > 0
-          ? "Everything found is already tracked."
-          : "No recurring charges with at least three payments were found.";
+  let autoTracked = 0;
+  const resolvedSuggestions: SuggestionDto[] = [];
+  for (const suggestion of suggestions) {
+    if (
+      suggestion.status === "pending" &&
+      suggestion.eligible &&
+      suggestion.actionable &&
+      !suggestion.autoTrackIgnored
+    ) {
+      const accepted = await acceptSuggestion(
+        db,
+        userId,
+        suggestion.id,
+        {},
+        input.timeZone,
+        true,
+      );
+      resolvedSuggestions.push({
+        ...accepted.suggestion,
+        source: suggestion.source,
+      });
+      autoTracked += 1;
+    } else {
+      resolvedSuggestions.push(suggestion);
+    }
+  }
+
+  const importMetadata = {
+    ...metadata,
+    suggestions: suggestions.length,
+    autoTracked,
+  };
+  await db
+    .update(imports)
+    .set({ metadata: importMetadata })
+    .where(eq(imports.id, row.id));
+
+  const pendingCount = resolvedSuggestions.filter(
+    (suggestion) => suggestion.status === "pending",
+  ).length;
+  let message: string;
+  if (autoTracked > 0) {
+    message = `${autoTracked} recurring ${autoTracked === 1 ? "charge was" : "charges were"} automatically tracked. You can undo this from the Saved list.`;
+  } else if (pendingCount > 0) {
+    message = `${pendingCount} recurring ${pendingCount === 1 ? "charge needs" : "charges need"} review before tracking.`;
+  } else if (!hasUsableRows) {
+    message = "No usable rows were found. Check the column mapping and date format.";
+  } else if (skippedExisting > 0) {
+    message = "Everything found is already tracked.";
+  } else {
+    message = "No recurring charges with at least three payments were found.";
+  }
 
   return {
-    import: toImportDto(row),
-    suggestions: suggestions.map((entry) => ({ ...entry, source: sourceFor(row) })),
+    import: toImportDto({ ...row, metadata: importMetadata }),
+    suggestions: resolvedSuggestions.map((entry) => ({
+      ...entry,
+      source: entry.source ?? sourceFor(row),
+    })),
     summary: {
       rows: prepared.parsed.rows.length,
       transactions: prepared.mapped.transactions.length,
@@ -683,6 +752,7 @@ export async function createCsvImport(
       errors: prepared.mapped.errors.slice(0, 50),
       candidates: candidates.length,
       skippedExisting,
+      autoTracked,
       message,
     },
   };
@@ -693,6 +763,7 @@ export async function createCsvImport(
 const suggestionSourceColumns = {
   id: imports.id,
   source: imports.source,
+  metadata: imports.metadata,
   subject: imports.subject,
   fromAddress: imports.fromAddress,
   createdAt: imports.createdAt,
@@ -816,6 +887,7 @@ export async function listDetectionSuggestions(
       suggestion: detectionSuggestions,
       importId: suggestionSourceColumns.id,
       source: suggestionSourceColumns.source,
+      metadata: suggestionSourceColumns.metadata,
       subject: suggestionSourceColumns.subject,
       fromAddress: suggestionSourceColumns.fromAddress,
       sourceCreatedAt: suggestionSourceColumns.createdAt,
@@ -837,7 +909,7 @@ export async function listDetectionSuggestions(
       row.importId
         ? {
             id: row.importId,
-            source: row.source ?? "paste",
+            source: displayImportSource(row.source ?? "paste", row.metadata),
             subject: row.subject,
             fromAddress: row.fromAddress,
             createdAt: row.sourceCreatedAt ?? row.suggestion.createdAt,
@@ -1125,6 +1197,7 @@ export async function acceptSuggestion(
   suggestionId: string,
   overrides: DetectionOverrides,
   timeZone: string,
+  autoTrack = false,
 ): Promise<{
   suggestion: SuggestionDto;
   subscriptionId: string;
@@ -1149,13 +1222,21 @@ export async function acceptSuggestion(
   const draft = draftPayload(existing);
   const input = suggestionToSubscriptionInput(draft, overrides);
   const source = draft.transactions ? "import" : "detection";
+  const acceptedPayload: SuggestionPayload = {
+    ...draft,
+    autoTracked: autoTrack,
+  };
 
   const accepted = await db.transaction(async (tx) => {
     await lockPlanForUser(tx, userId);
     await enforceActiveItemLimit(tx, userId);
     const [claimed] = await tx
       .update(detectionSuggestions)
-      .set({ status: "accepted", resolvedAt: new Date() })
+      .set({
+        status: "accepted",
+        resolvedAt: new Date(),
+        payload: acceptedPayload as unknown as Record<string, unknown>,
+      })
       .where(
         and(
           eq(detectionSuggestions.id, suggestionId),
@@ -1200,6 +1281,63 @@ export async function acceptSuggestion(
     subscriptionId: accepted.subscriptionId,
     recordedPayments,
   };
+}
+
+export async function undoAutoTrackedSuggestion(
+  db: Database,
+  userId: string,
+  suggestionId: string,
+): Promise<SuggestionDto> {
+  const existing = await getOwnedSuggestion(db, userId, suggestionId);
+  if (!existing) throw notFound("Suggestion not found.");
+  const payload = draftPayload(existing);
+  const subscriptionId = existing.acceptedSubscriptionId;
+  if (
+    existing.status !== "accepted" ||
+    payload.autoTracked !== true ||
+    !subscriptionId
+  ) {
+    throw conflict("Only automatically tracked items can be undone here.");
+  }
+
+  return db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(detectionSuggestions)
+      .set({
+        status: "pending",
+        acceptedSubscriptionId: null,
+        resolvedAt: null,
+        payload: {
+          ...payload,
+          autoTracked: false,
+          autoTrackIgnored: true,
+        } as unknown as Record<string, unknown>,
+      })
+      .where(
+        and(
+          eq(detectionSuggestions.id, suggestionId),
+          eq(detectionSuggestions.userId, userId),
+          eq(detectionSuggestions.status, "accepted"),
+          eq(detectionSuggestions.acceptedSubscriptionId, subscriptionId),
+        ),
+      )
+      .returning();
+    if (!claimed) throw conflict("This automatic track was already changed.");
+
+    await cancelSubscriptionReminders(tx, subscriptionId);
+    const [deleted] = await tx
+      .delete(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.userId, userId),
+        ),
+      )
+      .returning({ id: subscriptions.id });
+    if (!deleted) throw notFound("Tracked item not found.");
+
+    return toSuggestionDto(claimed);
+  });
 }
 
 export async function rejectSuggestion(

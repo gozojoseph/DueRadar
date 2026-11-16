@@ -88,14 +88,16 @@ These map to the information the DPC lists as required for registration.
 No special-category data is requested. Free-text notes are user-controlled; users are told not to
 enter payment credentials or sensitive data, and the product has no fields for card numbers,
 CVVs, PINs, bank credentials or account numbers. Imported statements and forwarded emails can contain
-transaction histories and information about third parties; the product asks users to forward only
-their own receipts, redacts identifiers before storage, and keeps raw text for no more than 72 hours.
-Screenshots are processed on the device, so the image itself never reaches DueRadar.
+transaction histories and information about third parties; the product asks users to import only
+their own records, redacts identifiers before storage, and keeps raw text for no more than 72 hours.
+The optional Gmail integration requests the restricted `gmail.readonly` OAuth scope and scans only
+matching billing messages when the user starts a scan. Screenshots are processed on the device, so
+the image itself never reaches DueRadar.
 
 ### c. Categories of data subjects
 
 - Adults who create a DueRadar account, primarily in Ghana and the Ghanaian diaspora.
-- Individuals named in a statement or forwarded receipt the user chooses to import. This is
+- Individuals named in a statement, email, or receipt the user chooses to import. This is
   incidental, minimised by redaction and the 72-hour raw-text window.
 - No employee, applicant, child or marketing-prospect data is processed.
 - No data is purchased or scraped.
@@ -105,7 +107,8 @@ Screenshots are processed on the device, so the image itself never reaches DueRa
 1. Create and verify accounts, authenticate users and secure sessions.
 2. Store the records the user enters and project future due dates from the schedule.
 3. Detect candidate bills, subscriptions and trials from messages, statements or screenshots the user
-   chooses to import, and present them for review. Nothing is added without the user's confirmation.
+   chooses to import. Message-based suggestions require review; strong recurring CSV candidates are
+   automatically tracked with an undo option.
 4. Send the reminders the user requested by email, browser push and in-app notification.
 5. Show users their own data and enforce ownership on every read and write.
 6. Provide support and investigate abuse or security incidents.
@@ -122,6 +125,7 @@ models.
 | Neon Inc. | Database and managed authentication | United Kingdom (`aws-eu-west-2`, London) | All account and tracking data, auth credentials |
 | Render Services, Inc. | Application and worker hosting | Frankfurt, Germany | Data in transit and process memory; application logs |
 | Resend, Inc. | Transactional email and inbound receiving | EU sending region (`eu-west-1`); group operations may include the US | Email address, verification and reminder content; forwarded message body and headers, fetched once for detection |
+| Google LLC | OAuth and Gmail API, only for users who connect Gmail | United States/global; confirm current Google terms and processing locations | OAuth authorization, Gmail profile address and messages matching the user's billing scan; requested scope is `gmail.readonly` |
 | Paystack (contracting entity to confirm) | Hosted checkout and payment verification | Confirm from merchant agreement before launch | Checkout email, amount, currency, plan, transaction reference and payment outcome; no card or mobile-money credentials are stored by DueRadar |
 | Optional LLM provider (not enabled) | Redacted extraction fallback | Depends on provider chosen; must be recorded before enabling | Redacted message text capped at 4,000 characters, no local-part email or account numbers |
 | Apple, Google, Mozilla push services | Deliver browser notifications | United States and global edge | Push endpoint, encrypted payload |
@@ -179,6 +183,11 @@ Implemented in Phase 1 and Phase 2:
   attachments are counted but never opened. Bodies are capped at 2 MB.
 - Raw text is redacted before storage (card/account numbers, mobile-money references, email local
   parts) and erased after at most 72 hours. Subject and sender are purged on the same schedule.
+- Gmail OAuth tokens are encrypted with AES-256-GCM before database storage and deleted when the
+  user disconnects; connection email/cursor metadata is cleared too. Account deletion removes
+  locally stored credentials, but users should also revoke DueRadar in Google Account settings if
+  they want Google's authorization removed. The OAuth state is hashed, one-time, user-bound and
+  expires after 10 minutes.
 - Detection is confirm-first. Blocked transaction types (card checks, refunds, declines, transfers)
   cannot be accepted. A missing renewal date produces a prompt, not a fabricated schedule.
 - OCR runs in the browser; the image is never uploaded. The CSP allows only the Tesseract CDN hosts
@@ -192,6 +201,8 @@ Known gaps to disclose and close:
 - No independent penetration test or SOC 2/ISO 27001 certification.
 - No dedicated data-protection officer; a DPS appointment is a business decision.
 - Provider DPAs/SCCs not yet filed.
+- Gmail restricted-scope verification and any required Google security assessment are not complete;
+  keep Gmail OAuth credentials unset and do not offer Gmail to the public until they are complete.
 - No breach-response drill completed.
 - Hosting/provider access logs are outside DueRadar's own retention job; confirm provider retention.
 - The optional LLM fallback is implemented but not enabled or provider-assessed. It must stay off until
@@ -214,6 +225,7 @@ Keep this table current; it is the basis for the filing and for renewal.
 | Device management | Users | Endpoint, keys, user agent, platform | Deliver push and let users recognise devices | Neon, Render, push services | Until device/account deletion |
 | Security and audit | Users, visitors | Action, entity, IP, user agent, timestamps | Detect abuse, investigate incidents, meet legal duties | Neon, Render | 12 months (deletion row until purged) |
 | Import detection — forwarded email and pasted text | Users; incidental third parties named in a receipt | Forwarding address, subject, sender domain, extracted text, evidence, warnings, review state | Detect candidate records for user confirmation | Neon, Render, Resend; LLM only if enabled | Raw text/subject/sender ≤72 hours; suggestions until resolved/deleted; address until revoked/deletion |
+| Import detection — Gmail | Users; incidental people named in selected billing messages | Gmail account address, encrypted OAuth tokens, scan cursor, message headers/IDs, redacted raw text, evidence and suggestions | User-triggered scan for billing candidates | Neon, Render, Google; LLM only if enabled | OAuth tokens and connection metadata until disconnect/account deletion; raw text and headers ≤72 hours; suggestions until deleted |
 | Import detection — CSV statement | Users; incidental third parties | Mapped transaction rows, row errors, duplicate flags | Detect recurring candidates | Neon, Render | File not stored; derived suggestions as above |
 | Import detection — screenshot OCR | Users | Extracted text | Detect candidates; the image never leaves the device | Extracted text to Neon, Render | Raw text ≤72 hours; image never stored |
 | Review inbox decisions | Users | Suggestion ID, status, accepted record ID, timestamps | Confirm or dismiss findings | Neon, Render | Until suggestion/account deletion |
@@ -227,6 +239,8 @@ sets the raw-text deadline and clears subject/sender/message ID when it expires.
 | Data | Retention | Mechanism |
 | --- | --- | --- |
 | Raw imported text | 72 hours maximum (configurable 1–72) | `imports.raw_text` nulled, status `expired`; subject, sender and message ID cleared on the same pass |
+| Gmail OAuth tokens and connection metadata | Until disconnect or account deletion | AES-256-GCM encrypted tokens and account/cursor metadata in `provider_connections`; cleared on disconnect and account deletion |
+| Pending Gmail OAuth state | 10 minutes | Hashed one-time state row consumed at callback or removed when expired |
 | Failed import record | 72 hours | Reason retained until the retention deadline, then purged with the import |
 | Imported attachment | Never stored or opened | Only an attachment count is kept |
 | Screenshot image | Never stored | Processed in the browser; only extracted text is submitted |

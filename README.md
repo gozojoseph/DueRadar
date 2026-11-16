@@ -136,6 +136,8 @@ See `.env.example` for the complete annotated list. The important production val
 | `INBOUND_EMAIL_DOMAIN`  | Domain behind forwarding addresses, e.g. `in.dueradar.cloud`      |
 | `DETECTION_RAW_RETENTION_HOURS` | Raw text lifetime, 1–72 hours; default 72                 |
 | `DETECTION_LLM_*`       | Optional redacted fallback; off unless explicitly enabled         |
+| `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET` | Google OAuth web client for optional Gmail scanning |
+| `PROVIDER_TOKEN_ENCRYPTION_KEY` | Base64-encoded 32-byte key for encrypted provider tokens |
 | `VAPID_*`               | Web Push key pair and contact subject                             |
 | `COOKIE_SECURE`         | Force Secure cookies (defaults from the `APP_ORIGIN` scheme)      |
 
@@ -208,14 +210,16 @@ Complete this on a real iPhone (Safari) and an Android device before starting de
 
 ## Phase 2 detection and review inbox
 
-Detection is **confirm-first**. No message ever creates a bill, subscription or trial by itself. A
-draft appears in `/detections`; accepting it is the only path to a record, and accepting reuses the
-same ownership and scheduling code as manual entry.
+Message detection is **confirm-first**. Gmail, forwarded mail, pasted text and screenshots create
+review suggestions; accepting one reuses the same ownership and scheduling code as manual entry.
+The only automatic tracking is a strong recurring pattern from a CSV statement (three or more
+matching charges), which appears in Saved and can be undone.
 
 | Input | Path | Notes |
 | --- | --- | --- |
 | Pasted text | `/import` → Paste | MoMo alerts, card alerts, renewals, trial notices, receipts |
 | Forwarded email | `/import` → Email | Private per-user address, rotating and revocable |
+| Gmail | `/import` → Gmail | User-triggered, read-only scan; 25 matching messages per batch |
 | CSV statement | `/import` → CSV | Header/date mapping, preview, row errors, dedupe |
 | Screenshot | `/import` → Screenshot | Tesseract runs in the browser; only extracted text is uploaded |
 
@@ -239,9 +243,16 @@ Accepting a suggestion claims it first (so a double tap cannot create two record
 record through the normal service, and records up to 24 confirmed historical payments from the
 import. Dismissing persists the dedupe key, so the same message is not proposed again.
 
-CSV import runs recurrence detection across the mapped rows. Individual rows are summarised, not
-turned into suggestions; only candidates with at least three successful charges are surfaced. The
-file is parsed in memory and never stored.
+CSV import runs recurrence detection across the mapped rows. Individual rows are summarized, not
+turned into suggestions; only candidates with at least three successful charges are auto-tracked.
+Undoing a candidate removes its reminder and returns it to review without auto-tracking it again.
+The file is parsed in memory and never stored.
+
+Gmail scanning requires a Google OAuth web client, the Gmail API, a stable provider-token encryption
+key, and the callback URI `${APP_ORIGIN}/oauth/gmail/callback`. Google classifies
+`gmail.readonly` as a restricted scope. Do not offer the feature broadly until Google verification
+and any required security assessment are complete. Scans are user-triggered, search the last year,
+and process up to 25 messages per batch. Imported message text is redacted and erased within 72 hours.
 
 ### Phase 2 acceptance checks
 
@@ -256,6 +267,9 @@ Run these with fixtures or a staging account before inviting users:
 - [ ] Import a CSV with a header row, a debit column and at least three matching charges; the preview matches, duplicates are flagged, and one candidate is proposed.
 - [ ] Import a CSV with a bad date row; the row is counted as an error and the rest still imports.
 - [ ] Re-import the same CSV; no duplicate suggestions appear.
+- [ ] Import a three-charge recurring pattern; it is auto-tracked once and Undo returns it to review.
+- [ ] With a Google test account, connect Gmail, scan a batch, and confirm only billing candidates
+  appear in the review inbox; disconnect and confirm the stored connection is removed.
 - [ ] Pick a screenshot in Chrome and Safari; OCR completes on-device, the network panel shows no image upload, and the text can be edited before import.
 - [ ] Save a suggestion; the record appears in Tracked with the correct anchor, cycle and payment history. Dismiss another and confirm it does not return.
 - [ ] Delete an import from `/import`; its suggestions go with it and saved records remain.
