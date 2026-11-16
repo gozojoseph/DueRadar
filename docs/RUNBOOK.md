@@ -22,8 +22,13 @@ services start migrations under advisory lock `728_491_002`.
 - [ ] `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm build` pass locally or in CI.
 - [ ] Any schema change has a generated migration in `packages/db/migrations/` and was reviewed.
 - [ ] New environment variables are present in both Render services, not just the web service.
+  Phase 2 requires `INBOUND_EMAIL_DOMAIN` and `DETECTION_RAW_RETENTION_HOURS` on both; the worker
+  purges expired raw text, so a missing worker variable would leave the wrong retention window.
 - [ ] The target Neon branch is the intended one (production vs staging), with a recent restore point.
-- [ ] Resend domain and DNS records are verified; the API key has sending permission only.
+- [ ] Resend sending domain and DNS records are verified; the API key has the least permissions that
+  still allow sending and reading received email. A leaked full-access key must be rotated.
+- [ ] If forwarding is enabled, the receiving domain shows verified and the `email.received` webhook
+  is active with the current signing secret.
 - [ ] `APP_ORIGIN` matches the hostname users will open, and that origin is trusted in Neon Auth.
 - [ ] `render.yaml` and the Render dashboard agree on plans, regions and commands.
 
@@ -84,7 +89,8 @@ errors.
   restored from backup; the product deliberately treats deletion as immediate.
 - To verify retention, query counts for raw imports older than 72 hours, webhook payloads older than
   30 days, and audit/delivery rows older than 12 months. The worker runs these cleanups every six
-  hours.
+  hours. Phase 2 also clears `subject`, `from_address` and `message_id` when raw text expires, and
+  keeps failed imports only until their 72-hour deadline.
 
 ## 6. Worker and reminder queue
 
@@ -101,26 +107,65 @@ errors.
   subscription, or a worker that cannot reach Neon. Check the worker log first, then Resend, then the
   database connection count.
 
-## 7. Email and inbound forwarding
+## 7. Email, forwarding and detection
 
-- Resend verifies the sending domain; keep SPF, DKIM and DMARC intact. Never send from an unverified
-  domain or a personal mailbox.
-- Neon Auth uses Resend SMTP for verification, reset and OTP mail. Test it after any credential
-  change with a real inbox.
-- The inbound catch-all posts to `/api/webhooks/resend`. The route verifies the signing secret;
-  payloads are retained for troubleshooting for 30 days and then purged.
-- Resend idempotency keys are derived per reminder job. Re-running the same job must not send a
-  duplicate; if duplicates appear, inspect the job key before changing delivery code.
-- If deliverability drops: check Resend bounce/complaint events, confirm DNS, then check whether the
-  recipient address is on a suppression list. Do not remove suppressions blindly.
+**Sending.** Resend verifies the sending domain; keep SPF, DKIM and DMARC intact. Never send from an
+unverified domain or a personal mailbox. Neon Auth uses Resend SMTP for verification, reset and OTP
+mail; test it after any credential change with a real inbox. Resend idempotency keys are derived per
+reminder job. Re-running the same job must not send a duplicate; if duplicates appear, inspect the job
+key before changing delivery code. If deliverability drops, check Resend bounce/complaint events,
+confirm DNS, then check whether the recipient is suppressed. Do not remove suppressions blindly.
+
+**Receiving.** `INBOUND_EMAIL_DOMAIN` names the domain behind every user's forwarding address
+(`dr-<random>@<domain>`). Add the MX record Resend provides and wait for the domain to show verified
+and receiving enabled. Resend's managed `<id>.resend.app` domain can stand in while custom DNS is
+blocked; the app displays whichever domain is configured.
+
+1. Resend posts an `email.received` event to `POST /api/webhooks/resend`.
+2. The route verifies `svix-id`, `svix-timestamp` and `svix-signature` against
+   `RESEND_WEBHOOK_SECRET`; unsigned, stale or altered payloads get 401 and are never parsed.
+3. The event is deduplicated by provider event ID in `webhook_events`. A previously failed event is
+   reprocessed when the duplicate arrives, so a retryable failure can recover.
+4. The recipient list is matched to an active alias, including `+tag` variants. Revoked aliases never
+   match. Unknown recipients are ignored.
+5. The body is fetched once from
+   `GET https://api.resend.com/emails/receiving/{email_id}?html_format=cid`, capped at 2 MB, with
+   remote images disabled. HTML is stripped to text; attachments are counted, never opened; links are
+   never followed.
+6. Free text is redacted, parsed, and stored with a 72-hour retention deadline. The alias receives a
+   `last_received_at` timestamp only after a successful read.
+
+**Retry and failure handling.** A retryable failure (Resend 5xx, timeout, body fetch failure) returns
+a non-2xx so Resend retries. A permanent failure (unreadable body, missing alias, oversized message)
+is recorded on the import with a 72-hour deadline and acknowledged with 200. The import history shows
+`Needs attention` with the reason and no raw body. Metadata-only logs are expected; never add the
+body, subject or sender to logs.
+
+**Alias rotation and revocation.** Users can replace or revoke their address in `/import` → Email.
+Rotation invalidates the old address immediately because matching is by active alias row, not by
+domain pattern. Revocation does the same. Mail already forwarded is unaffected and may still appear
+if it arrives before the revocation commits.
+
+**Detection review.** Imported messages create drafts only; nothing becomes a record until accepted in
+`/detections`. If the review inbox shows a suggestion with a blocked reason, it is a refund, decline,
+card check, transfer or other non-charge and must not be saved as a bill. If an accepted record has
+the wrong anchor, correct it in the record form; do not edit detection rows by hand.
+
+**Diagnosing a missing forward.** Check, in order: the address shown in the app matches
+`INBOUND_EMAIL_DOMAIN`; the Resend receiving domain is verified; the webhook delivery log shows a
+2xx; `webhook_events` has the event; the alias row is active; the import row exists and its status.
+If the body was fetched but unreadable, the import says `no_readable_text`; ask the user to paste the
+text instead rather than loosening the size or attachment rules.
 
 ## 8. Secrets and rotation
 
 | Secret                  | Rotation impact                                                        |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `DATABASE_URL` password | Update Neon role password, then both Render services; old connections drain |
-| `RESEND_API_KEY`        | Update web + worker + Neon Auth SMTP; send a test email                 |
-| `RESEND_WEBHOOK_SECRET` | Update Render and the Resend webhook endpoint together                  |
+| `RESEND_API_KEY`        | Update web + worker + Neon Auth SMTP; confirm it can send and read received email; send a test |
+| `RESEND_WEBHOOK_SECRET` | Update Render and the Resend webhook endpoint together; old signatures stop verifying |
+| `INBOUND_EMAIL_DOMAIN`  | Changing the domain changes every future address; existing aliases keep their stored address |
+| `DETECTION_LLM_API_KEY` | Only used when the fallback is enabled; rotate at the provider and update Render |
 | VAPID key pair          | Rotating invalidates every existing browser subscription; users must re-enable push |
 | Neon Auth config        | Changes may invalidate sessions or redirect handling; test on staging first |
 
@@ -136,6 +181,8 @@ Minimum weekly checks:
 - Worker `Reminder delivery failed` and `Maintenance failed` entries.
 - Neon connection count, storage, and slow queries.
 - Resend bounce/complaint rates and inbound webhook failures.
+- Import failures: count of `imports.status = 'failed'` in the last 24 hours, and rows still holding
+  raw text past `raw_retention_until`. A non-zero overdue count means the worker cleanup is not running.
 - Auth failures: `INVALID_ORIGIN`, `MISSING_ORIGIN`, `INVALID_HOSTNAME`, unexpected 5xx.
 
 There is no third-party analytics or advertising pixel. Do not add one without updating the privacy
@@ -175,10 +222,12 @@ check device registrations. Account deletion remains available even during suppo
   for passwords, OTPs or card data.
 - Log the request and outcome without storing the user's bill contents in the support system.
 
-## 12. M0 acceptance gate
+## 12. M0 and Phase 2 acceptance gates
 
-Run this on production or staging with real devices before starting detection work. Record the date,
-build/commit, devices and result.
+Run the M0 gate on production or staging with real devices, then the Phase 2 gate with fixtures or a
+staging account. Record the date, build/commit, devices and result.
+
+**M0 gate**
 
 - [ ] Sign-up with a real inbox; verification OTP arrives; email is verified.
 - [ ] Sign-in with password and with emailed code; session survives refresh and PWA relaunch.
@@ -192,13 +241,38 @@ build/commit, devices and result.
 - [ ] Resend inbound webhook verifies signatures and rejects unsigned requests.
 - [ ] Rollback was rehearsed once on staging.
 
-Only after this gate should Phase 2 detection work begin.
+**Phase 2 gate**
+
+- [ ] A MoMo alert creates a pending draft with evidence; no record exists until accepted.
+- [ ] A card check, refund and decline are blocked and cannot be accepted.
+- [ ] A trial with a stated duration calculates the end date; a missing one is requested.
+- [ ] A one-off charge asks for the next renewal date instead of guessing.
+- [ ] Forwarding works end to end, including a `+tag` address, and the alias timestamp updates.
+- [ ] Rotation stops the old address; revocation stops new mail; neither resurrects old drafts.
+- [ ] CSV preview maps headers, flags duplicate rows and imports a three-charge candidate.
+- [ ] Re-importing the same CSV creates no duplicate suggestions.
+- [ ] Screenshot OCR completes on Chrome and Safari without uploading the image; text is editable.
+- [ ] Accepting a draft creates the record with the correct anchor and up to 24 payments; dismissing
+      persists so the same message is not proposed again.
+- [ ] An import with status `failed` shows its reason and stores no raw body.
+- [ ] Raw text, subject and sender disappear after the retention window; suggestions remain.
+- [ ] Rollback was rehearsed once on staging.
 
 ## 13. Known limits
 
-- No social login in Phase 1; no two-factor authentication yet.
-- No native Android SMS reading and no bank/issuer integrations. Gmail stays off until Google
-  verification/CASA; partner adapters stay behind flags.
+- No social login and no two-factor authentication yet.
+- Detection is deterministic and English-first. Unusual formats, non-English receipts and images with
+  handwriting may fail; the fallback is the Paste tab, not looser parsing.
+- Attachments are never opened and remote content is never loaded, so a receipt that exists only as a
+  PDF or image attachment will be reported as unreadable. Screenshot OCR is client-side only.
+- CSV import reads a single statement at a time, up to 2 MB and 5,000 rows. It does not reconcile
+  across banks or currencies; cross-source duplicates are estimates, not authoritative.
+- Gmail, bank and issuer integrations remain off. Gmail requires Google restricted-scope
+  verification/CASA; partner adapters require verified agreements.
+- The optional LLM fallback is off by default and only fills fields the parsers left empty. It is not
+  a source of truth and must not be enabled without updating the DPC/ROPA record.
+- Recurring candidates need three matching successful charges; two charges are shown for context but
+  are not proposed as a recurrence.
 - Projections are estimates, clearly labelled, and must never be presented as confirmed charges.
 - Render has no London region; Frankfurt is the chosen compromise (~15 ms to Neon London).
 - The service is not a payment processor and never stores full card or mobile-money credentials.

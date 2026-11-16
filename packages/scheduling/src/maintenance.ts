@@ -1,4 +1,4 @@
-import { and, isNotNull, lt } from "drizzle-orm";
+import { and, isNotNull, lt, or } from "drizzle-orm";
 import { auditEvents, deliveryAttempts, imports, webhookEvents } from "@dueradar/db/schema";
 import type { Database } from "@dueradar/db";
 
@@ -41,8 +41,23 @@ export async function runRetention(db: Database, now = new Date()): Promise<Main
 
   const expired = await db
     .update(imports)
-    .set({ rawText: null, status: "expired", processedAt: now })
-    .where(and(isNotNull(imports.rawText), lt(imports.rawRetentionUntil, now)))
+    .set({
+      rawText: null,
+      subject: null,
+      fromAddress: null,
+      status: "expired",
+      processedAt: now,
+    })
+    .where(
+      and(
+        lt(imports.rawRetentionUntil, now),
+        or(
+          isNotNull(imports.rawText),
+          isNotNull(imports.subject),
+          isNotNull(imports.fromAddress),
+        ),
+      ),
+    )
     .returning({ id: imports.id });
 
   const oldWebhooks = await db

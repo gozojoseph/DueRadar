@@ -15,7 +15,7 @@ import {
   zonedWallTimeToUtc,
   type ReminderChannel,
 } from "@dueradar/domain";
-import type { Database } from "@dueradar/db";
+import type { Database, DatabaseExecutor } from "@dueradar/db";
 
 export interface ReminderJobDraft {
   userId: string;
@@ -28,7 +28,7 @@ export interface ReminderJobDraft {
 }
 
 async function replaceOccurrenceJobs(
-  db: Database,
+  db: DatabaseExecutor,
   occurrenceId: string,
   drafts: ReminderJobDraft[],
 ): Promise<void> {
@@ -63,7 +63,7 @@ async function replaceOccurrenceJobs(
 }
 
 export async function cancelOccurrenceReminders(
-  db: Database,
+  db: DatabaseExecutor,
   occurrenceId: string,
 ): Promise<void> {
   await db
@@ -78,7 +78,7 @@ export async function cancelOccurrenceReminders(
 }
 
 export async function cancelSubscriptionReminders(
-  db: Database,
+  db: DatabaseExecutor,
   subscriptionId: string,
 ): Promise<void> {
   await db
@@ -148,7 +148,7 @@ function buildOccurrenceDrafts(
 
 /** Recomputes every reminder for a single occurrence. */
 export async function planOccurrenceReminders(
-  db: Database,
+  db: DatabaseExecutor,
   occurrenceId: string,
   now = new Date(),
 ): Promise<void> {
@@ -173,7 +173,7 @@ export async function planOccurrenceReminders(
 
 /** Recomputes reminders for every pending occurrence of one subscription. */
 export async function syncSubscriptionReminders(
-  db: Database,
+  db: DatabaseExecutor,
   userId: string,
   subscriptionId: string,
   now = new Date(),

@@ -190,6 +190,18 @@ describe("deviceInputSchema", () => {
         keys: { p256dh: "x".repeat(20), auth: "y".repeat(10) },
       }).success,
     ).toBe(true);
+    for (const endpoint of [
+      "http://push.example.test/endpoint",
+      "https://user:password@push.example.test/endpoint",
+      "https://push.example.test:8443/endpoint",
+    ]) {
+      expect(
+        deviceInputSchema.safeParse({
+          endpoint,
+          keys: { p256dh: "x".repeat(20), auth: "y".repeat(10) },
+        }).success,
+      ).toBe(false);
+    }
     expect(
       deviceInputSchema.safeParse({
         endpoint: "not-a-url",

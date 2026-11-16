@@ -3,8 +3,10 @@ import { eq } from "drizzle-orm";
 import {
   billingOccurrences,
   categories,
+  detectionSuggestions,
   devices,
   emailAliases,
+  imports,
   notifications,
   paymentMethods,
   payments,
@@ -28,23 +30,39 @@ export async function registerExportRoutes(
     const user = await userWithEmail(request, env, await requireUser(request, env));
     const profile = await ensureProfile(db, user);
 
-    const [subscriptionRows, occurrenceRows, paymentRows, categoryRows, methodRows, notificationRows, deviceRows, aliasRows, providerRows] =
-      await Promise.all([
-        db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)),
-        db.select().from(billingOccurrences).where(eq(billingOccurrences.userId, user.id)),
-        db.select().from(payments).where(eq(payments.userId, user.id)),
-        db.select().from(categories).where(eq(categories.userId, user.id)),
-        db.select().from(paymentMethods).where(eq(paymentMethods.userId, user.id)),
-        db.select().from(notifications).where(eq(notifications.userId, user.id)),
-        db.select().from(devices).where(eq(devices.userId, user.id)),
-        db.select().from(emailAliases).where(eq(emailAliases.userId, user.id)),
-        db.select().from(providerConnections).where(eq(providerConnections.userId, user.id)),
-      ]);
+    const [
+      subscriptionRows,
+      occurrenceRows,
+      paymentRows,
+      categoryRows,
+      methodRows,
+      notificationRows,
+      deviceRows,
+      aliasRows,
+      providerRows,
+      importRows,
+      suggestionRows,
+    ] = await Promise.all([
+      db.select().from(subscriptions).where(eq(subscriptions.userId, user.id)),
+      db.select().from(billingOccurrences).where(eq(billingOccurrences.userId, user.id)),
+      db.select().from(payments).where(eq(payments.userId, user.id)),
+      db.select().from(categories).where(eq(categories.userId, user.id)),
+      db.select().from(paymentMethods).where(eq(paymentMethods.userId, user.id)),
+      db.select().from(notifications).where(eq(notifications.userId, user.id)),
+      db.select().from(devices).where(eq(devices.userId, user.id)),
+      db.select().from(emailAliases).where(eq(emailAliases.userId, user.id)),
+      db.select().from(providerConnections).where(eq(providerConnections.userId, user.id)),
+      db.select().from(imports).where(eq(imports.userId, user.id)),
+      db
+        .select()
+        .from(detectionSuggestions)
+        .where(eq(detectionSuggestions.userId, user.id)),
+    ]);
 
     const payload = {
       exportedAt: new Date().toISOString(),
       app: "DueRadar",
-      schemaVersion: 1,
+      schemaVersion: 2,
       profile,
       subscriptions: subscriptionRows,
       occurrences: occurrenceRows,
@@ -68,6 +86,10 @@ export async function registerExportRoutes(
         createdAt: connection.createdAt,
         revokedAt: connection.revokedAt,
       })),
+      // Raw message text is deliberately excluded: it is erased after 72 hours
+      // and may already be gone when this export runs.
+      imports: importRows.map(({ rawText: _rawText, ...rest }) => rest),
+      detectionSuggestions: suggestionRows,
     };
 
     const filename = `dueradar-export-${todayInTimeZone(profile.timezone)}.json`;

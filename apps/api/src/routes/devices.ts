@@ -4,10 +4,11 @@ import { devices } from "@dueradar/db/schema";
 import { requireUser } from "../auth/guard.js";
 import type { Database } from "../db.js";
 import type { Env } from "../env.js";
-import { notFound, parseBody } from "../lib/errors.js";
+import { badRequest, notFound, parseBody } from "../lib/errors.js";
 import { recordAudit } from "../lib/audit.js";
 import type { Clients } from "../lib/clients.js";
 import { deviceInputSchema } from "../schemas.js";
+import { PushEndpointError } from "@dueradar/push";
 
 export async function registerDeviceRoutes(
   app: FastifyInstance,
@@ -35,6 +36,14 @@ export async function registerDeviceRoutes(
   app.post("/api/v1/devices", async (request, reply) => {
     const user = await requireUser(request, env);
     const input = parseBody(deviceInputSchema, request.body);
+    try {
+      await clients.push.validateEndpoint(input.endpoint);
+    } catch (error) {
+      if (error instanceof PushEndpointError) {
+        throw badRequest(error.message);
+      }
+      throw error;
+    }
 
     const [device] = await db
       .insert(devices)

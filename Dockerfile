@@ -16,6 +16,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/detection/package.json packages/detection/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/email/package.json packages/email/package.json
 COPY packages/push/package.json packages/push/package.json
@@ -38,6 +39,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/detection/package.json packages/detection/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/email/package.json packages/email/package.json
 COPY packages/push/package.json packages/push/package.json

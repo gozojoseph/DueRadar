@@ -5,24 +5,29 @@ import {
   CalendarDays,
   Download,
   Home,
+  Inbox,
   Plus,
   Receipt,
   Settings,
+  Upload,
   WifiOff,
   X,
 } from "lucide-react";
 import { Wordmark } from "./Logo";
 import { Badge, Button, Modal, cx } from "./ui";
-import { useNotifications } from "../lib/queries";
+import { useDetectionSummary, useNotifications } from "../lib/queries";
 import { useInstallPrompt, useOnline } from "../lib/usePwa";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/subscriptions", label: "Tracked", icon: Receipt },
   { to: "/occurrences", label: "Due", icon: CalendarDays },
+  { to: "/import", label: "Import", icon: Upload },
+  { to: "/detections", label: "Review", icon: Inbox },
   { to: "/notifications", label: "Alerts", icon: Bell },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
+const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 5);
 
 function NavItem({
   to,
@@ -79,9 +84,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const location = useLocation();
   const notifications = useNotifications();
+  const detections = useDetectionSummary();
   const { canInstall, canPrompt, isIos, installed, dismissed, install, dismiss } = useInstallPrompt();
   const [iosHelp, setIosHelp] = useState(false);
   const showInstall = canInstall && !installed && !dismissed;
+
+  function badgeFor(path: string): number | undefined {
+    if (path === "/notifications") return notifications.data?.unread;
+    if (path === "/detections") return detections.data?.pending;
+    return undefined;
+  }
 
   async function startInstall() {
     if (canPrompt) {
@@ -101,11 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Primary">
             {NAV_ITEMS.map((item) => (
-              <NavItem
-                key={item.to}
-                {...item}
-                unread={item.to === "/notifications" ? notifications.data?.unread : undefined}
-              />
+              <NavItem key={item.to} {...item} unread={badgeFor(item.to)} />
             ))}
           </nav>
 
@@ -185,13 +193,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-label="Primary"
       >
         <div className="mx-auto flex max-w-md items-stretch">
-          {NAV_ITEMS.map((item) => (
-            <NavItem
-              key={item.to}
-              {...item}
-              mobile
-              unread={item.to === "/notifications" ? notifications.data?.unread : undefined}
-            />
+          {MOBILE_NAV_ITEMS.map((item) => (
+            <NavItem key={item.to} {...item} mobile unread={badgeFor(item.to)} />
           ))}
         </div>
       </nav>

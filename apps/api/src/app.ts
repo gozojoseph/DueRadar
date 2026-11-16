@@ -26,12 +26,15 @@ const CSP_DIRECTIVES = {
   objectSrc: ["'none'"],
   frameAncestors: ["'self'"],
   formAction: ["'self'"],
-  scriptSrc: ["'self'"],
+  // The optional screenshot reader loads Tesseract's worker, WASM core and
+  // English model only when the user picks an image. The image itself never
+  // leaves the device. Keep this list narrow; no other third-party script runs.
+  scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
   styleSrc: ["'self'", "'unsafe-inline'"],
   imgSrc: ["'self'", "data:", "blob:"],
   fontSrc: ["'self'", "data:"],
-  connectSrc: ["'self'"],
-  workerSrc: ["'self'", "blob:"],
+  connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://tessdata.projectnaptha.com"],
+  workerSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net"],
   manifestSrc: ["'self'"],
   upgradeInsecureRequests: [],
 };

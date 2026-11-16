@@ -45,6 +45,10 @@ services:
         sync: false
       - key: RESEND_WEBHOOK_SECRET
         sync: false
+      - key: INBOUND_EMAIL_DOMAIN
+        sync: false
+      - key: DETECTION_RAW_RETENTION_HOURS
+        value: "72"
       - key: VAPID_PUBLIC_KEY
         sync: false
       - key: VAPID_PRIVATE_KEY

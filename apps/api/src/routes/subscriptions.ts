@@ -23,9 +23,12 @@ const listQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
 });
 
-function serviceError(error: unknown): never {
+export function serviceError(error: unknown): never {
   if (error instanceof Error && error.message === "category_not_owned") {
     throw badRequest("That category no longer exists.");
+  }
+  if (error instanceof Error && error.message === "payment_method_not_owned") {
+    throw badRequest("That payment method no longer exists.");
   }
   throw error;
 }

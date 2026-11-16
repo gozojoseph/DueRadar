@@ -9,9 +9,19 @@ import type {
   CalendarData,
   Category,
   Config,
+  CsvImportResult,
+  CsvMapping,
+  CsvPreview,
   DashboardData,
+  DetectionAcceptOverrides,
+  DetectionStatus,
+  DetectionSuggestion,
+  DetectionSummary,
   Device,
+  EmailAliasResponse,
+  ImportHistoryItem,
   MeResponse,
+  MessageImportResult,
   Notification,
   Occurrence,
   PaymentMethod,
@@ -30,6 +40,11 @@ const ALL_KEYS = [
   ["notifications"],
   ["devices"],
   ["profile"],
+  ["detections"],
+  ["detectionSummary"],
+  ["imports"],
+  ["importHistory"],
+  ["emailAlias"],
 ] as const;
 
 export function useRefreshAll() {
@@ -329,5 +344,118 @@ export function useDeleteAccount() {
   return useMutation({
     mutationFn: (reason?: string) =>
       api.post("/account/delete", { confirm: "DELETE", reason }),
+  });
+}
+
+/* ------------------------------- Phase 2 ------------------------------- */
+
+export function useDetectionSummary() {
+  return useQuery({
+    queryKey: ["detectionSummary"],
+    queryFn: () => api.get<DetectionSummary>("/detections/summary"),
+    staleTime: 20_000,
+    refetchInterval: 90_000,
+  });
+}
+
+export function useDetections(
+  status: DetectionStatus | "all" = "pending",
+  includeBlocked = true,
+) {
+  return useQuery({
+    queryKey: ["detections", status, includeBlocked],
+    queryFn: () =>
+      api.get<{ suggestions: DetectionSuggestion[] }>("/detections", {
+        status,
+        includeBlocked: includeBlocked ? "true" : "false",
+      }),
+    staleTime: 15_000,
+  });
+}
+
+export function useAcceptDetection() {
+  return useRoutineMutation({
+    mutationFn: (input: { id: string; overrides?: DetectionAcceptOverrides }) =>
+      api.post<{
+        suggestion: DetectionSuggestion;
+        subscriptionId: string;
+        recordedPayments: number;
+      }>(`/detections/${input.id}/accept`, { overrides: input.overrides ?? {} }),
+  });
+}
+
+export function useRejectDetection() {
+  return useRoutineMutation({
+    mutationFn: (input: { id: string; reason?: string | null }) =>
+      api.post<{ suggestion: DetectionSuggestion }>(`/detections/${input.id}/reject`, {
+        reason: input.reason ?? null,
+      }),
+  });
+}
+
+export function useRejectAllDetections() {
+  return useRoutineMutation({
+    mutationFn: (ids?: string[]) =>
+      api.post<{ rejected: number }>("/detections/reject-all", { ids }),
+  });
+}
+
+export function useImportMessage() {
+  return useRoutineMutation({
+    mutationFn: (input: {
+      source?: "paste" | "ocr" | "upload";
+      text: string;
+      subject?: string | null;
+      fromAddress?: string | null;
+    }) => api.post<MessageImportResult>("/imports/message", input),
+  });
+}
+
+export function useImportHistory(limit = 20) {
+  return useQuery({
+    queryKey: ["importHistory", limit],
+    queryFn: () => api.get<{ imports: ImportHistoryItem[] }>("/imports", { limit }),
+    staleTime: 30_000,
+  });
+}
+
+export function useDeleteImport() {
+  return useRoutineMutation({
+    mutationFn: (id: string) => api.delete(`/imports/${id}`),
+  });
+}
+
+export function useCsvPreview() {
+  return useMutation({
+    mutationFn: (input: { csv: string; mapping?: CsvMapping | null }) =>
+      api.post<{ preview: CsvPreview }>("/imports/csv/preview", input),
+  });
+}
+
+export function useCsvImport() {
+  return useRoutineMutation({
+    mutationFn: (input: { csv: string; mapping: CsvMapping; fileName?: string | null }) =>
+      api.post<CsvImportResult>("/imports/csv", input),
+  });
+}
+
+export function useEmailAlias() {
+  return useQuery({
+    queryKey: ["emailAlias"],
+    queryFn: () => api.get<EmailAliasResponse>("/email-alias"),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateEmailAlias() {
+  return useRoutineMutation({
+    mutationFn: (rotate?: boolean) =>
+      api.post<EmailAliasResponse>("/email-alias", { rotate }),
+  });
+}
+
+export function useRevokeEmailAlias() {
+  return useRoutineMutation({
+    mutationFn: () => api.delete<EmailAliasResponse>("/email-alias"),
   });
 }

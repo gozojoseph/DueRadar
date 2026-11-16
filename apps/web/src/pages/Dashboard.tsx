@@ -6,14 +6,16 @@ import {
   CalendarDays,
   CheckCircle2,
   CreditCard,
+  Inbox,
   Plus,
   Receipt,
   Sparkles,
+  Upload,
   Wallet,
 } from "lucide-react";
 import { Badge, Button, Card, CardSkeleton, EmptyState, PageHeader, cx } from "../components/ui";
 import { OccurrenceRow, OccurrenceSheet } from "../components/records";
-import { useDashboard, useMe } from "../lib/queries";
+import { useDashboard, useDetectionSummary, useMe } from "../lib/queries";
 import { formatDate, money, shortDate, todayLocal } from "../lib/format";
 import type { DashboardData, Occurrence } from "../lib/types";
 
@@ -41,6 +43,7 @@ function primaryTotal(dashboard: DashboardData, key: keyof DashboardData["totals
 export function DashboardPage() {
   const dashboard = useDashboard();
   const me = useMe();
+  const detections = useDetectionSummary();
   const [selected, setSelected] = useState<Occurrence | null>(null);
 
   if (dashboard.isLoading) {
@@ -105,13 +108,46 @@ export function DashboardPage() {
                 : "Nothing is overdue. Here is the month ahead."}
           </p>
         </div>
-        <Link to="/subscriptions/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            Add something
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/import">
+            <Button variant="secondary">
+              <Upload className="h-4 w-4" />
+              Import
+            </Button>
+          </Link>
+          <Link to="/subscriptions/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Add something
+            </Button>
+          </Link>
+        </div>
       </section>
+
+      {detections.data && detections.data.pending > 0 ? (
+        <Card className="mb-5 flex flex-wrap items-center gap-3 border-brand-600/25 bg-brand-50/70 p-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-brand-700">
+            <Inbox className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink">
+              {detections.data.pending} detected{" "}
+              {detections.data.pending === 1 ? "payment is" : "payments are"} waiting for you
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+              {detections.data.needsDetails > 0
+                ? `${detections.data.needsDetails} need a date before they can become reminders.`
+                : "Confirm what to track. Nothing is added automatically."}
+            </p>
+          </div>
+          <Link to="/detections">
+            <Button size="sm">
+              Review
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </Card>
+      ) : null}
 
       {nothingYet ? (
         <Card className="overflow-hidden">

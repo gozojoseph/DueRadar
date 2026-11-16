@@ -238,9 +238,14 @@ export const imports = pgTable(
     userId: text("user_id").notNull(),
     source: text("source").notNull(),
     status: text("status").$type<ImportStatus>().notNull().default("pending"),
+    subject: text("subject"),
+    fromAddress: text("from_address"),
+    messageId: text("message_id"),
     rawText: text("raw_text"),
     rawRetentionUntil: timestamp("raw_retention_until", { withTimezone: true }),
     processedAt: timestamp("processed_at", { withTimezone: true }),
+    error: text("error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamps.createdAt,
   },
   (table) => [
@@ -264,11 +269,14 @@ export const detectionSuggestions = pgTable(
     confidence: integer("confidence").notNull().default(0),
     status: text("status").$type<SuggestionStatus>().notNull().default("pending"),
     dedupeKey: text("dedupe_key").notNull(),
+    acceptedSubscriptionId: uuid("accepted_subscription_id").references(() => subscriptions.id, {
+      onDelete: "set null",
+    }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     createdAt: timestamps.createdAt,
   },
   (table) => [
-    uniqueIndex("detection_suggestions_dedupe_uq").on(table.dedupeKey),
+    uniqueIndex("detection_suggestions_user_dedupe_uq").on(table.userId, table.dedupeKey),
     index("detection_suggestions_user_status_idx").on(table.userId, table.status),
     check("detection_suggestions_confidence_check", sql`${table.confidence} between 0 and 100`),
     check(
@@ -372,9 +380,14 @@ export const emailAliases = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
     address: text("address").notNull(),
+    lastReceivedAt: timestamp("last_received_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
     createdAt: timestamps.createdAt,
   },
-  (table) => [uniqueIndex("email_aliases_address_uq").on(table.address)],
+  (table) => [
+    uniqueIndex("email_aliases_address_uq").on(table.address),
+    index("email_aliases_user_idx").on(table.userId),
+  ],
 );
 
 export const providerConnections = pgTable(
@@ -407,6 +420,10 @@ export const webhookEvents = pgTable(
     externalId: text("external_id").notNull(),
     payloadHash: text("payload_hash"),
     status: text("status").notNull().default("received"),
+    attempts: integer("attempts").notNull().default(0),
+    error: text("error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -444,3 +461,8 @@ export type Device = typeof devices.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type Import = typeof imports.$inferSelect;
+export type NewImport = typeof imports.$inferInsert;
+export type DetectionSuggestion = typeof detectionSuggestions.$inferSelect;
+export type EmailAlias = typeof emailAliases.$inferSelect;
+export type WebhookEvent = typeof webhookEvents.$inferSelect;

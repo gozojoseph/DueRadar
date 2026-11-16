@@ -7,6 +7,8 @@ import { Button, Spinner } from "./components/ui";
 import { useAuth } from "./lib/session";
 import { useMe } from "./lib/queries";
 import { DashboardPage } from "./pages/Dashboard";
+import { DetectionsPage } from "./pages/Detections";
+import { ImportPage } from "./pages/Import";
 import { LandingPage } from "./pages/Landing";
 import { OnboardingPage } from "./pages/Onboarding";
 import { SubscriptionsPage } from "./pages/Subscriptions";
@@ -192,6 +194,22 @@ export default function App() {
           element={
             <Protected>
               <CalendarPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/import"
+          element={
+            <Protected>
+              <ImportPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/detections"
+          element={
+            <Protected>
+              <DetectionsPage />
             </Protected>
           }
         />

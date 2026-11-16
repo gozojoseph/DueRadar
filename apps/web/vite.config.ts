@@ -10,36 +10,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: null,
-      manifest: {
-        name: "DueRadar — bills, subscriptions and trials",
-        short_name: "DueRadar",
-        description:
-          "Track bills, subscriptions and free trials in Ghana. GHS by default, reminders before every due date.",
-        id: "/",
-        start_url: "/",
-        scope: "/",
-        display: "standalone",
-        orientation: "portrait-primary",
-        background_color: "#f6f5f1",
-        theme_color: "#0b3b36",
-        lang: "en-GH",
-        dir: "ltr",
-        categories: ["finance", "productivity", "utilities"],
-        icons: [
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          {
-            src: "/icons/maskable-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
-        ],
-        shortcuts: [
-          { name: "Add a bill", short_name: "Add", url: "/subscriptions/new" },
-          { name: "Due soon", short_name: "Due", url: "/occurrences?view=due" },
-        ],
-      },
+      manifest: false,
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2,webmanifest}"],
         globIgnores: ["push-sw.js"],

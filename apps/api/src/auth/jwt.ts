@@ -26,6 +26,16 @@ function getJwks(env: Env) {
 }
 
 /**
+ * Warms the JWKS cache right after startup so the first bearer request does
+ * not pay the initial remote fetch (~1s+ on a cold process). Never throws:
+ * when the auth service is briefly unavailable, verification still works
+ * lazily on the first real request.
+ */
+export function warmUpJwks(env: Env): void {
+  void getJwks(env)({ alg: "EdDSA" }).catch(() => undefined);
+}
+
+/**
  * Verifies a Neon Auth access token (15-minute EdDSA JWT) against the
  * branch's JWKS. Issuer/audience checks are enabled when configured.
  */

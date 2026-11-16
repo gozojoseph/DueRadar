@@ -7,6 +7,7 @@ import {
   isSupportedCurrency,
   isValidTimeOfDay,
 } from "@dueradar/domain";
+import { CSV_MAX_BYTES } from "@dueradar/detection";
 
 export const dateString = z
   .string()
@@ -172,7 +173,25 @@ export const paymentMethodInputSchema = z
 
 export const deviceInputSchema = z
   .object({
-    endpoint: z.string().url().max(1000),
+    endpoint: z
+      .string()
+      .url()
+      .max(1000)
+      .refine((value) => {
+        let url: URL;
+        try {
+          url = new URL(value);
+        } catch {
+          return false;
+        }
+        return (
+          url.protocol === "https:" &&
+          !url.username &&
+          !url.password &&
+          (!url.port || url.port === "443") &&
+          !url.hash
+        );
+      }, "Use a public HTTPS push endpoint"),
     keys: z.object({
       p256dh: z.string().min(10).max(500),
       auth: z.string().min(5).max(200),
@@ -194,3 +213,90 @@ export const notificationReadSchema = z
   .strict();
 
 export const testChannelSchema = z.object({ channel: z.enum(["email", "push"]) }).strict();
+
+/* ------------------------------ Phase 2 imports ---------------------------- */
+
+/**
+ * A screenshot is read on the device and only its text is uploaded, so `ocr`
+ * carries the same shape as a pasted message. `email` and `csv` are produced by
+ * the server, never chosen by a signed-in client.
+ */
+export const importMessageSchema = z
+  .object({
+    source: z.enum(["paste", "ocr", "upload"]).default("paste"),
+    text: z.string().trim().min(1, "Paste the message or receipt text").max(60_000),
+    subject: z.string().trim().max(300).nullable().optional(),
+    fromAddress: z.string().trim().max(320).nullable().optional(),
+  })
+  .strict();
+
+export const csvMappingSchema = z
+  .object({
+    date: z.string().trim().max(120),
+    merchant: z.string().trim().max(120),
+    amount: z.string().trim().max(120).nullable().optional(),
+    debit: z.string().trim().max(120).nullable().optional(),
+    credit: z.string().trim().max(120).nullable().optional(),
+    currency: z.string().trim().max(120).nullable().optional(),
+    type: z.string().trim().max(120).nullable().optional(),
+    reference: z.string().trim().max(120).nullable().optional(),
+    dateFormat: z.enum(["auto", "dmy", "mdy", "ymd"]).default("auto"),
+    defaultCurrency: currency.default("GHS"),
+  })
+  .strict();
+
+export const csvPreviewSchema = z
+  .object({
+    csv: z.string().min(1, "Choose a CSV file").max(CSV_MAX_BYTES),
+    mapping: csvMappingSchema.nullable().optional(),
+  })
+  .strict();
+
+export const csvImportSchema = z
+  .object({
+    csv: z.string().min(1, "Choose a CSV file").max(CSV_MAX_BYTES),
+    mapping: csvMappingSchema,
+    fileName: z.string().trim().max(200).nullable().optional(),
+  })
+  .strict();
+
+const detectionOverrideSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    vendor: z.string().trim().max(120).nullable().optional(),
+    kind: z.enum(["subscription", "bill", "trial"]).optional(),
+    amountMinor: z.number().int().min(0).max(1_000_000_000_000).optional(),
+    currency: currency.optional(),
+    cycle: z.enum(BILLING_CYCLES).optional(),
+    customIntervalDays: z.number().int().min(1).max(366).nullable().optional(),
+    anchorDate: dateString.optional(),
+    trialEndsAt: dateString.nullable().optional(),
+    categoryId: z.string().uuid().nullable().optional(),
+    paymentMethodId: z.string().uuid().nullable().optional(),
+    url: z.string().trim().max(500).nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    reminderOffsets: z.array(z.number().int().min(0).max(60)).max(6).nullable().optional(),
+    reminderChannels: z.array(z.enum(REMINDER_CHANNELS)).min(1).max(3).nullable().optional(),
+  })
+  .strict();
+
+export const detectionAcceptSchema = z
+  .object({ overrides: detectionOverrideSchema.default({}) })
+  .strict();
+
+export const detectionRejectSchema = z
+  .object({ reason: z.string().trim().max(300).nullable().optional() })
+  .strict()
+  .default({});
+
+export const detectionRejectAllSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1).max(200).optional(),
+  })
+  .strict()
+  .default({});
+
+export const emailAliasCreateSchema = z
+  .object({ rotate: z.boolean().optional() })
+  .strict()
+  .default({});

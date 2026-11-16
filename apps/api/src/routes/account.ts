@@ -22,7 +22,6 @@ import { requireUser } from "../auth/guard.js";
 import { parseBody } from "../lib/errors.js";
 import { accountDeleteSchema } from "../schemas.js";
 import { ensureProfile, lookupAuthIdentity } from "../services/profile.js";
-import { clearSessionCache } from "../auth/session.js";
 import type { Clients } from "../lib/clients.js";
 import { secureCookies } from "../env.js";
 
@@ -100,10 +99,6 @@ export async function registerAccountRoutes(
       });
     });
 
-    // Cookie lookups are memoised for 30 seconds. If that cache kept the
-    // deleted user's session, their still-valid cookie would keep working
-    // until the entry expired.
-    clearSessionCache();
     clearAuthCookies(reply, env);
 
     if (email && clients.email.configured) {

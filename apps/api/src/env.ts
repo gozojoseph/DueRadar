@@ -53,12 +53,43 @@ const EnvSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:support@dueradar.cloud"),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Domain that receives forwarded email, for example `inbound.dueradar.cloud`
+   * or the account-managed `<id>.resend.app` domain. No scheme and no `@`.
+   */
+  INBOUND_EMAIL_DOMAIN: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(253)
+    .refine(
+      (value) => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(value),
+      "Use a bare domain such as inbound.dueradar.cloud",
+    )
+    .optional(),
+  /** Raw message text is erased after this many hours. Never more than 72. */
+  DETECTION_RAW_RETENTION_HOURS: z.coerce.number().int().min(1).max(72).default(72),
+  DETECTION_LLM_ENABLED: z.string().optional(),
+  DETECTION_LLM_URL: z.string().url().optional(),
+  DETECTION_LLM_API_KEY: z.string().optional(),
+  DETECTION_LLM_MODEL: z.string().trim().max(120).optional(),
+  DETECTION_LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(8000),
   RUN_MIGRATIONS: z.string().optional(),
   SERVE_WEB: z.string().optional(),
   WEB_DIST: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
+
+export function isInboundEmailConfigured(
+  env: Pick<Env, "NODE_ENV" | "INBOUND_EMAIL_DOMAIN" | "RESEND_API_KEY" | "RESEND_WEBHOOK_SECRET">,
+): boolean {
+  return Boolean(
+    env.INBOUND_EMAIL_DOMAIN &&
+      env.RESEND_API_KEY &&
+      (env.NODE_ENV !== "production" || env.RESEND_WEBHOOK_SECRET),
+  );
+}
 
 let cached: Env | null = null;
 
@@ -82,4 +113,11 @@ export function secureCookies(env: Env): boolean {
   if (env.COOKIE_SECURE === "true") return true;
   if (env.COOKIE_SECURE === "false") return false;
   return env.APP_ORIGIN.startsWith("https://");
+}
+
+export function llmDetectionEnabled(env: Env): boolean {
+  return (
+    env.DETECTION_LLM_ENABLED === "true" &&
+    Boolean(env.DETECTION_LLM_URL && env.DETECTION_LLM_API_KEY && env.DETECTION_LLM_MODEL)
+  );
 }

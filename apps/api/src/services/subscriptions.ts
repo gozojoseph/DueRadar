@@ -1,4 +1,5 @@
 import { and, eq, gte, min, sql } from "drizzle-orm";
+import type { DatabaseExecutor } from "@dueradar/db";
 import {
   billingOccurrences,
   categories,
@@ -56,7 +57,7 @@ function normaliseInput(input: SubscriptionInput): SubscriptionInput {
 }
 
 async function assertOwnedReferences(
-  db: Database,
+  db: DatabaseExecutor,
   userId: string,
   input: Pick<SubscriptionInput, "categoryId" | "paymentMethodId">,
 ): Promise<void> {
@@ -79,7 +80,7 @@ async function assertOwnedReferences(
 }
 
 async function materialiseOccurrences(
-  db: Database,
+  db: DatabaseExecutor,
   subscription: Subscription,
   today: string,
 ): Promise<void> {
@@ -132,7 +133,10 @@ async function materialiseOccurrences(
     .onConflictDoNothing();
 }
 
-export async function refreshNextDueDate(db: Database, subscriptionId: string): Promise<string | null> {
+export async function refreshNextDueDate(
+  db: DatabaseExecutor,
+  subscriptionId: string,
+): Promise<string | null> {
   const [row] = await db
     .select({ next: min(billingOccurrences.dueDate) })
     .from(billingOccurrences)
@@ -199,7 +203,7 @@ export async function getOwnedSubscription(
 }
 
 export async function createSubscription(
-  db: Database,
+  db: DatabaseExecutor,
   userId: string,
   rawInput: SubscriptionInput,
   timeZone: string,

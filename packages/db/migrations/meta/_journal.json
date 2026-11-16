@@ -8,6 +8,20 @@
       "when": 1794785714931,
       "tag": "0000_giant_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794790568670,
+      "tag": "0001_romantic_madelyne_pryor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794790592781,
+      "tag": "0002_common_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,12 @@
   "engines": {
     "node": ">=22.12"
   },
+  "pnpm": {
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.4",
+      "workbox-build>glob": "14.0.6"
+    }
+  },
   "scripts": {
     "dev": "pnpm --parallel --filter @dueradar/api --filter @dueradar/web dev",
     "dev:worker": "pnpm --filter @dueradar/worker dev",
@@ -20,6 +26,6 @@
   "devDependencies": {
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.12"
   }
 }

@@ -1,4 +1,5 @@
 import { buildApp } from "./app.js";
+import { warmUpJwks } from "./auth/jwt.js";
 import { db, pool } from "./db.js";
 import { loadEnv } from "./env.js";
 import { runMigrations } from "@dueradar/db";
@@ -18,6 +19,10 @@ if (env.RUN_MIGRATIONS !== "false") {
 }
 
 const app = await buildApp({ env, db, pool });
+
+// Prime the Neon Auth JWKS cache in the background; failures are harmless
+// because verification fetches lazily anyway.
+warmUpJwks(env);
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, "Shutting down");

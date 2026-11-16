@@ -4,7 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { registerActiveAccountGuard } from "../src/auth/guard.js";
-import { clearSessionCache, sessionFromCookie } from "../src/auth/session.js";
+import { sessionFromCookie } from "../src/auth/session.js";
 import type { Database } from "../src/db.js";
 import { loadEnv } from "../src/env.js";
 import { ApiError } from "../src/lib/errors.js";
@@ -166,38 +166,32 @@ describe("deleted account access", () => {
     );
   });
 
-  it("forgets a cached cookie session when deletion clears the cache", async () => {
+  it("checks the auth service on every cookie session lookup", async () => {
     const cookie = "better-auth.session_token=cached-deletion-test";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
+    const authFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
         new Response(JSON.stringify({ user: { id: USER_ID, email: "cached@example.test" } }), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
-      ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal(
+      "fetch",
+      authFetch,
     );
 
     const first = await sessionFromCookie(cookie, env);
     expect(first?.id).toBe(USER_ID);
 
-    // A second lookup is served from the 30-second cache and does not call
-    // Neon Auth again.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify({ user: null }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
-    );
-    const cached = await sessionFromCookie(cookie, env);
-    expect(cached?.id).toBe(USER_ID);
-
-    clearSessionCache();
-
     const afterDeletion = await sessionFromCookie(cookie, env);
     expect(afterDeletion).toBeNull();
+    expect(authFetch).toHaveBeenCalledTimes(2);
   });
 });
