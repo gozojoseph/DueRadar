@@ -118,6 +118,7 @@ async function maintenance(): Promise<void> {
       subscriptions: refresh.subscriptions,
       expiredImports: retention.expiredImports,
       purgedWebhooks: retention.purgedWebhooks,
+      purgedDeliveryAttempts: retention.purgedDeliveryAttempts,
       purgedAudit: retention.purgedAudit,
       durationMs: Date.now() - started,
     });

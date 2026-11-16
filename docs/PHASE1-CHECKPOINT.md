@@ -32,12 +32,19 @@ insert a fresh profile because the token remained cryptographically valid for up
 Regression coverage: rejected deleted bearer, allowed live bearer, cookie path untouched, no profile
 insert for a deleted auth user, cache invalidation, and all eight cookie names cleared.
 
+## Retention correction
+
+The privacy notice promised 12-month retention for delivery attempts and for the non-identifying
+deletion audit row, but the maintenance job did not purge either. `runRetention` now deletes delivery
+attempts and all audit events older than 365 days (including `account.deleted`), and the worker logs
+`purgedDeliveryAttempts`. Boundary tests cover the 30-day webhook and 12-month audit/delivery cutoffs.
+
 ## Verification evidence
 
 | Check | Result |
 | --- | --- |
 | `pnpm typecheck` | all 8 workspace projects pass |
-| `pnpm test` | 18 domain + 44 API = 62 tests pass |
+| `pnpm test` | 18 domain + 47 API = 65 tests pass |
 | `pnpm build` | production PWA builds, 15 precache entries |
 | Local API against Neon main | health/config/401/404/auth proxy/static PWA all correct |
 | Local worker | migrations, startup, maintenance cycle and push configuration verified |

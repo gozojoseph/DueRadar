@@ -103,7 +103,7 @@ proxying `/api` to port 3001.
 
 ```bash
 pnpm typecheck   # all workspace projects
-pnpm test        # domain + API suites (currently 62 tests)
+pnpm test        # domain + API suites (currently 65 tests)
 pnpm build       # typecheck and production PWA build
 ```
 

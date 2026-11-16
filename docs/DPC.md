@@ -180,16 +180,17 @@ Keep this table current; it is the basis for the filing and for renewal.
 | --- | --- | --- |
 | Raw imported text | 72 hours | `imports.raw_text` nulled, status `expired` |
 | Webhook dedupe records | 30 days | Deleted by maintenance |
-| Audit events | 12 months | Deleted, except `account.deleted` rows |
+| Delivery attempts | 12 months | Deleted by maintenance |
+| Audit events | 12 months | Deleted by maintenance, including `account.deleted` rows |
 | Account and tracking data | Until user deletes | Immediate transactional deletion |
-| Deletion audit row | Until audit purge | No user ID, email or tracking content; metadata is reason + `hadEmail` |
-| Delivery attempts / notifications | Until account deletion; delivery attempts also age out with audit maintenance | Verify before launch |
+| In-app notifications | Until account deletion | Removed transactionally with the user |
+| Deletion audit row | 12 months, with the audit log | No user ID, email or tracking content; metadata is reason + `hadEmail` |
 | Database backups | Provider restore window | Confirm the configured Neon window and record it here: `[WINDOW]` |
 
-The privacy notice promises "up to 12 months" for delivery attempts and audit events. If delivery
-attempts are not yet covered by a purge job, either add one before launch or correct the notice.
-**Open action:** confirm this with a query against the production branch after the first maintenance
-cycle.
+The privacy notice promises "up to 12 months" for delivery attempts and audit events, and says the
+deletion record expires with the audit log. `maintenance.ts` now enforces all three. **Open action:**
+confirm the first production maintenance cycle logs `purgedDeliveryAttempts` and `purgedAudit` as
+expected when rows age out.
 
 ## 6. Data subject request procedure
 
@@ -279,7 +280,7 @@ the privacy notice and the transfer assessment first.
 | 7 | Decide on a Data Protection Supervisor; record the decision | Open |
 | 8 | File Neon, Render and Resend DPAs/SCCs | Open |
 | 9 | Confirm Neon backup window and record it in section 5 | Open |
-| 10 | Confirm delivery-attempt retention matches the notice | Open |
+| 10 | Confirm delivery-attempt and deletion-audit purges run in production | Done in code; verify first cycle |
 | 11 | Name the incident owner and backup contact | Open |
 | 12 | Run a tabletop breach drill and record lessons | Open |
 | 13 | Complete DPIA screening sign-off | Open |
