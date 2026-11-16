@@ -1,0 +1,25 @@
+{
+  "name": "dueradar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @dueradar/api --filter @dueradar/web dev",
+    "dev:worker": "pnpm --filter @dueradar/worker dev",
+    "build": "pnpm --filter @dueradar/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @dueradar/db generate",
+    "db:migrate": "pnpm --filter @dueradar/db migrate",
+    "db:studio": "pnpm --filter @dueradar/db studio"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

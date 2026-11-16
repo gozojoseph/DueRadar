@@ -1,0 +1,88 @@
+# Render blueprint for DueRadar.
+#
+# Neon is managed outside Render. Create a production branch there first, then
+# set the sync:false values in the Render dashboard. Both services are paid
+# plans because Render background workers are not available on the free plan.
+services:
+  - type: web
+    name: dueradar
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_ORIGIN
+        value: https://app.dueradar.cloud
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SERVE_WEB
+        value: "true"
+      - key: WEB_DIST
+        value: /app/apps/web/dist
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: SUPPORT_EMAIL
+        value: support@dueradar.cloud
+      - key: EMAIL_FROM
+        value: "DueRadar <reminders@dueradar.cloud>"
+      - key: VAPID_SUBJECT
+        value: mailto:support@dueradar.cloud
+      # Secrets and branch-specific values: set in the Render dashboard.
+      - key: DATABASE_URL
+        sync: false
+      - key: NEON_AUTH_BASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+  - type: worker
+    name: dueradar-worker
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: pnpm --filter @dueradar/worker start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_ORIGIN
+        value: https://app.dueradar.cloud
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: POLL_INTERVAL_MS
+        value: "15000"
+      - key: MAINTENANCE_INTERVAL_HOURS
+        value: "6"
+      - key: SUPPORT_EMAIL
+        value: support@dueradar.cloud
+      - key: EMAIL_FROM
+        value: "DueRadar <reminders@dueradar.cloud>"
+      - key: VAPID_SUBJECT
+        value: mailto:support@dueradar.cloud
+      - key: DATABASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false

@@ -1,0 +1,26 @@
+{
+  "name": "@dueradar/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@dueradar/db": "workspace:*",
+    "@dueradar/domain": "workspace:*",
+    "@dueradar/email": "workspace:*",
+    "@dueradar/push": "workspace:*",
+    "@dueradar/scheduling": "workspace:*",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
