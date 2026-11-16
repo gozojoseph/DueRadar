@@ -80,7 +80,7 @@ export async function ensureProfile(db: Database, user: AuthUser): Promise<Profi
 
   const [created] = await db
     .insert(profiles)
-    .values({ userId: user.id, email, displayName })
+    .values({ userId: user.id, email, displayName, paidAccessRequired: true })
     .onConflictDoNothing()
     .returning();
 

@@ -437,14 +437,15 @@ export function TermsPage() {
 
       <Section title="7. Fees and changes">
         <p>
-          The Free plan includes up to five active items and basic reminders. DueRadar Plus includes
-          unlimited active items and email import. Plus is available for GHS 9.99 per month or
-          GHS 99 per year, paid in advance through Paystack hosted checkout. Each purchase is a
-          one-time payment for the selected term; there is no automatic renewal. You can renew
-          manually, and any unused paid access is added to the new term. Accounts existing when
-          paid plans launched keep their grandfathered Plus access. Refund requests are reviewed
-          case by case under applicable law; contact support. We show the price and term before
-          checkout. You can export and delete your data at any time.
+          Existing Free-plan users may continue with their current access. New accounts need an
+          active paid Plus plan to use DueRadar; no free plan or free trial is offered to new
+          accounts. Plus includes unlimited active items and email import. Plus is available for
+          GHS 9.99 per month or GHS 99 per year, paid in advance through Paystack hosted checkout.
+          Each purchase is a one-time payment for the selected term; there is no automatic renewal.
+          You can renew manually, and any unused paid access is added to the new term. Accounts
+          existing when paid plans launched keep their grandfathered Plus access. Refund requests
+          are reviewed case by case under applicable law; contact support. We show the price and term
+          before checkout. You can export and delete your data at any time.
         </p>
         <p>
           We may update these terms. Material changes will be announced in the app or by email before

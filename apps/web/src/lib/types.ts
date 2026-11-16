@@ -27,6 +27,7 @@ export interface Profile {
   planTier: "free" | "plus";
   planExpiresAt: string | null;
   planGrandfathered: boolean;
+  paidAccessRequired: boolean;
   suspendedAt: string | null;
   suspensionReason: string | null;
   onboardedAt: string | null;
@@ -207,6 +208,7 @@ export interface MeResponse {
   user: { id: string; email: string; name: string | null };
   profile: Profile;
   needsOnboarding: boolean;
+  requiresPaidPlan: boolean;
   isAdmin: boolean;
 }
 

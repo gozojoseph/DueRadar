@@ -32,20 +32,38 @@ export function registerActiveAccountGuard(
     }
 
     const result = await pool.query(
-      `select p.suspended_at
+      `select p.suspended_at,
+         case
+           when p.user_id is null then true
+           when p.paid_access_required and not (
+             p.plan_tier = 'plus'
+             and (
+               p.plan_grandfathered
+               or coalesce(p.plan_expires_at > now(), false)
+             )
+           ) then true
+           else false
+         end as requires_paid_plan
        from neon_auth."user" as u
        left join public.profiles as p on p.user_id = u.id::text
        where u.id = $1::uuid
        limit 1`,
       [user.id],
     );
-    const account = result.rows[0] as { suspended_at?: Date | string | null } | undefined;
+    const account = result.rows[0] as
+      | { suspended_at: Date | string | null; requires_paid_plan: boolean }
+      | undefined;
     if (!account) {
       throw unauthorized("Your account no longer exists. Sign in again.");
     }
     if (account.suspended_at && !isSuspensionExempt(request)) {
       throw forbidden(
         "Your account is suspended. You can still export your data or delete your account.",
+      );
+    }
+    if (account.requires_paid_plan && !isPaidPlanExempt(request)) {
+      throw forbidden(
+        "Choose a DueRadar Plus plan to unlock this feature. Your account has no free plan or trial.",
       );
     }
   });
@@ -58,6 +76,22 @@ function isSuspensionExempt(request: FastifyRequest): boolean {
     (request.method === "GET" && (path === "/api/v1/me" || path === "/api/v1/export")) ||
     (request.method === "DELETE" && path === "/api/v1/account") ||
     (request.method === "POST" && path === "/api/v1/account/delete")
+  );
+}
+
+export function isPaidPlanExempt(
+  request: Pick<FastifyRequest, "method" | "url">,
+): boolean {
+  const path = request.url.split("?")[0] ?? request.url;
+  if (path.startsWith("/api/v1/admin/")) return true;
+  return (
+    (request.method === "GET" &&
+      ["/api/v1/me", "/api/v1/billing", "/api/v1/export"].includes(path)) ||
+    (request.method === "POST" &&
+      ["/api/v1/billing/checkout", "/api/v1/billing/verify", "/api/v1/account/delete"].includes(
+        path,
+      )) ||
+    (request.method === "DELETE" && path === "/api/v1/account")
   );
 }
 

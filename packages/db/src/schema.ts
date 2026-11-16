@@ -71,6 +71,7 @@ export const profiles = pgTable(
     planTier: text("plan_tier").$type<PlanTier>().notNull().default("free"),
     planExpiresAt: timestamp("plan_expires_at", { withTimezone: true }),
     planGrandfathered: boolean("plan_grandfathered").notNull().default(false),
+    paidAccessRequired: boolean("paid_access_required").notNull().default(false),
     suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     suspensionReason: text("suspension_reason"),
     onboardedAt: timestamp("onboarded_at", { withTimezone: true }),

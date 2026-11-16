@@ -7,7 +7,7 @@ import {
   verifyPaystackSignature,
   type VerifiedPaystackTransaction,
 } from "../src/services/paystack.js";
-import { hasPlusAccess } from "../src/services/plan.js";
+import { hasPlusAccess, requiresPaidPlan } from "../src/services/plan.js";
 
 const now = new Date("2026-11-20T12:00:00.000Z");
 const reference = "dr_1234567890abcdef";
@@ -48,6 +48,64 @@ describe("Plus entitlement", () => {
     expect(
       hasPlusAccess(
         { planTier: "free", planExpiresAt: null, planGrandfathered: false },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("requires payment only for paid-only accounts without active Plus access", () => {
+    expect(
+      requiresPaidPlan(
+        {
+          paidAccessRequired: true,
+          planTier: "free",
+          planExpiresAt: null,
+          planGrandfathered: false,
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      requiresPaidPlan(
+        {
+          paidAccessRequired: false,
+          planTier: "free",
+          planExpiresAt: null,
+          planGrandfathered: false,
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      requiresPaidPlan(
+        {
+          paidAccessRequired: true,
+          planTier: "plus",
+          planExpiresAt: new Date("2026-11-20T12:00:00.001Z"),
+          planGrandfathered: false,
+        },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      requiresPaidPlan(
+        {
+          paidAccessRequired: true,
+          planTier: "plus",
+          planExpiresAt: now,
+          planGrandfathered: false,
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      requiresPaidPlan(
+        {
+          paidAccessRequired: true,
+          planTier: "plus",
+          planExpiresAt: null,
+          planGrandfathered: true,
+        },
         now,
       ),
     ).toBe(false);
@@ -112,7 +170,7 @@ describe("Paystack payment verification", () => {
       email: "member@example.test",
       reference,
       interval: "monthly",
-      callbackUrl: "https://app.example.test/settings?billing=return",
+      callbackUrl: "https://app.example.test/billing/return",
     });
 
     expect(checkoutUrl).toBe("https://checkout.paystack.com/example");
@@ -122,7 +180,7 @@ describe("Paystack payment verification", () => {
       amount: 999,
       currency: "GHS",
       reference,
-      callback_url: "https://app.example.test/settings?billing=return",
+      callback_url: "https://app.example.test/billing/return",
     });
   });
 
@@ -147,7 +205,7 @@ describe("Paystack payment verification", () => {
         email: "member@example.test",
         reference,
         interval: "monthly",
-        callbackUrl: "https://app.example.test/settings?billing=return",
+        callbackUrl: "https://app.example.test/billing/return",
       }),
     ).rejects.toThrow("unexpected checkout URL");
   });

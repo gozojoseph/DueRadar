@@ -30,6 +30,16 @@ export function hasPlusAccess(
   );
 }
 
+export function requiresPaidPlan(
+  profile: Pick<
+    typeof profiles.$inferSelect,
+    "paidAccessRequired" | "planTier" | "planExpiresAt" | "planGrandfathered"
+  >,
+  now = new Date(),
+): boolean {
+  return profile.paidAccessRequired && !hasPlusAccess(profile, now);
+}
+
 export async function getPlanAccess(
   db: DatabaseExecutor,
   userId: string,

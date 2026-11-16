@@ -86,7 +86,7 @@ export async function registerBillingRoutes(
           email: user.email,
           reference,
           interval: input.interval,
-          callbackUrl: new URL("/settings?billing=return", env.APP_ORIGIN).toString(),
+          callbackUrl: new URL("/billing/return", env.APP_ORIGIN).toString(),
         });
         return { checkoutUrl, reference };
       } catch (error) {

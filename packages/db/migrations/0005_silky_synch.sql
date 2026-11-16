@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "paid_access_required" boolean DEFAULT false NOT NULL;

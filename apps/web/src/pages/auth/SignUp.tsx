@@ -115,6 +115,11 @@ export function SignUpPage() {
             instead, or reset your password.
           </Note>
         ) : null}
+        <Note tone="info">
+          New accounts need an active DueRadar Plus plan to use the app. There is no free plan or
+          free trial for new accounts; choose monthly or annual after signing up. Existing Free-plan
+          users keep their current access.
+        </Note>
 
         <Field label="Your name" htmlFor="signup-name">
           <div className="relative">

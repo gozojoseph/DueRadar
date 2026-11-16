@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AlertTriangle, LogIn } from "lucide-react";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/Logo";
@@ -27,6 +27,7 @@ import { VerifyEmailPage } from "./pages/auth/VerifyEmail";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPassword";
 import { ResetPasswordPage } from "./pages/auth/ResetPassword";
 import { AdminPage, SuspendedAccountPage } from "./pages/Admin";
+import { BillingReturnPage, PlanRequiredPage, PlanSelectionModal } from "./pages/PlanAccess";
 
 function Splash({ label = "Loading DueRadar" }: { label?: string }) {
   return (
@@ -78,6 +79,7 @@ function SessionProblem() {
 function ProfileGate({ children }: { children: ReactNode }) {
   const me = useMe();
   const location = useLocation();
+  const navigate = useNavigate();
 
   if (me.isLoading) return <Splash label="Loading your account" />;
   if (me.isError || !me.data) return <SessionProblem />;
@@ -95,6 +97,25 @@ function ProfileGate({ children }: { children: ReactNode }) {
       />
     );
   }
+  if (me.data.requiresPaidPlan) {
+    const isLegacyBillingReturn =
+      location.pathname === "/settings" &&
+      new URLSearchParams(location.search).get("billing") === "return";
+    if (location.pathname === "/billing/return" || isLegacyBillingReturn) {
+      return <BillingReturnPage />;
+    }
+    if (location.pathname === "/settings/account") return <AccountPage />;
+    if (location.pathname === "/plan-required") {
+      return <PlanRequiredPage email={me.data.profile.email} />;
+    }
+    return (
+      <PlanSelectionModal
+        onLater={() => navigate("/plan-required", { replace: true })}
+      />
+    );
+  }
+  if (location.pathname === "/plan-required") return <Navigate to="/" replace />;
+  if (location.pathname === "/billing/return") return <BillingReturnPage />;
   if (me.data.needsOnboarding) return <Navigate to="/onboarding" replace />;
 
   return <AppShell>{children}</AppShell>;
@@ -114,6 +135,7 @@ function Protected({ children }: { children: ReactNode }) {
 function OnboardingRoute() {
   const { status } = useAuth();
   const me = useMe(status === "authenticated");
+  const navigate = useNavigate();
 
   if (status === "loading") return <Splash label="Checking your session" />;
   if (status === "anonymous") return <Navigate to="/sign-in" replace />;
@@ -124,6 +146,13 @@ function OnboardingRoute() {
       <SuspendedAccountPage
         email={me.data.profile.email}
         reason={me.data.profile.suspensionReason}
+      />
+    );
+  }
+  if (me.data.requiresPaidPlan) {
+    return (
+      <PlanSelectionModal
+        onLater={() => navigate("/plan-required", { replace: true })}
       />
     );
   }
@@ -269,6 +298,22 @@ export default function App() {
           element={
             <Protected>
               <AdminPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/billing/return"
+          element={
+            <Protected>
+              <BillingReturnPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/plan-required"
+          element={
+            <Protected>
+              {null}
             </Protected>
           }
         />

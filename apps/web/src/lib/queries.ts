@@ -166,6 +166,7 @@ export function useVerifyBillingCheckout() {
     onSuccess: async () => {
       await refresh();
       await queryClient.invalidateQueries({ queryKey: ["billing"] });
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
     },
   });
 }

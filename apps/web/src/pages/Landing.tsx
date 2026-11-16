@@ -77,7 +77,7 @@ export function LandingPage() {
             </Link>
             <Link to="/sign-up">
               <Button size="sm">
-                Start free
+                Create account
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
@@ -108,7 +108,7 @@ export function LandingPage() {
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link to="/sign-up">
                   <Button size="lg">
-                    Create your free account
+                    Create your account
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -120,7 +120,8 @@ export function LandingPage() {
               </div>
               <p className="mt-4 flex items-center gap-1.5 text-xs text-muted">
                 <LockKeyhole className="h-3.5 w-3.5" aria-hidden />
-                No card details, no bank login. You stay in control of what you add.
+                New accounts require Plus; choose a plan after signup. Existing Free accounts keep
+                access.
               </p>
             </div>
 
@@ -262,7 +263,7 @@ export function LandingPage() {
             <div className="flex flex-wrap gap-3">
               <Link to="/sign-up">
                 <Button size="lg" className="bg-white text-brand-900 hover:bg-brand-50">
-                  Start tracking free
+                  Get started
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
