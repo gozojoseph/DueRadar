@@ -33,6 +33,7 @@ import {
   Textarea,
   useToast,
 } from "../components/ui";
+import { PlanSelectionModal } from "./PlanAccess";
 import {
   useCreateEmailAlias,
   useBillingPlan,
@@ -79,6 +80,8 @@ const SOURCE_LABELS: Record<string, string> = {
 export function ImportPage() {
   const [tab, setTab] = useState<Tab>("paste");
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const plan = useBillingPlan();
 
   function showResult(next: ImportResult) {
     setResult(next);
@@ -101,29 +104,77 @@ export function ImportPage() {
         }
       />
 
-      <Segmented
-        value={tab}
-        onChange={(value) => {
-          setTab(value);
-          setResult(null);
-        }}
-        options={[
-          { value: "paste", label: "Paste" },
-          { value: "email", label: "Email" },
-          { value: "csv", label: "CSV" },
-          { value: "screenshot", label: "Screenshot" },
-        ]}
-        className="mb-5"
-      />
+      {plan.isLoading ? <LoadingBlock label="Checking your plan" /> : null}
+      {plan.isError ? (
+        <Note tone="error">
+          Could not verify your plan, so imports are unavailable. {errorMessage(plan.error)}{" "}
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => void plan.refetch()}
+          >
+            Try again
+          </button>
+        </Note>
+      ) : null}
+      {plan.data?.tier === "plus" ? (
+        <>
+          <Segmented
+            value={tab}
+            onChange={(value) => {
+              setTab(value);
+              setResult(null);
+            }}
+            options={[
+              { value: "paste", label: "Paste" },
+              { value: "email", label: "Email" },
+              { value: "csv", label: "CSV" },
+              { value: "screenshot", label: "Screenshot" },
+            ]}
+            className="mb-5"
+          />
 
-      {result ? <ImportResultCard result={result} onDismiss={() => setResult(null)} /> : null}
+          {result ? <ImportResultCard result={result} onDismiss={() => setResult(null)} /> : null}
 
-      {tab === "paste" ? <PasteTab onResult={showResult} /> : null}
-      {tab === "email" ? <EmailTab /> : null}
-      {tab === "csv" ? <CsvTab onResult={showResult} /> : null}
-      {tab === "screenshot" ? <ScreenshotTab onResult={showResult} /> : null}
+          {tab === "paste" ? <PasteTab onResult={showResult} /> : null}
+          {tab === "email" ? <EmailTab /> : null}
+          {tab === "csv" ? <CsvTab onResult={showResult} /> : null}
+          {tab === "screenshot" ? <ScreenshotTab onResult={showResult} /> : null}
+        </>
+      ) : null}
+      {plan.data?.tier === "free" ? (
+        <Card className="p-5 sm:p-6">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-ink">Choose an import method</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
+              Paste, email, CSV, and screenshot imports are DueRadar Plus features. Choose any
+              method to view the plans. You can still browse and track items manually.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              { label: "Paste", icon: ClipboardPaste },
+              { label: "Email", icon: Mail },
+              { label: "CSV", icon: FileSpreadsheet },
+              { label: "Screenshot", icon: Camera },
+            ].map(({ label, icon: Icon }) => (
+              <Button
+                key={label}
+                variant="secondary"
+                fullWidth
+                className="justify-start"
+                onClick={() => setPlanModalOpen(true)}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                {label}
+              </Button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <HistorySection />
+      {planModalOpen ? <PlanSelectionModal onLater={() => setPlanModalOpen(false)} /> : null}
     </div>
   );
 }
@@ -286,7 +337,6 @@ function PasteTab({ onResult }: { onResult: (result: MessageImportResult) => voi
 /* ---------------------------------- email --------------------------------- */
 
 function EmailTab() {
-  const plan = useBillingPlan();
   const alias = useEmailAlias();
   const create = useCreateEmailAlias();
   const revoke = useRevokeEmailAlias();
@@ -361,17 +411,6 @@ function EmailTab() {
             a CSV meanwhile. If this is unexpected, contact {data.domain ?? "support"}.
           </Note>
         ) : null}
-        {plan.data && !plan.data.canUseEmailImport ? (
-          <Note tone="warn" className="mt-3">
-            Email import is a DueRadar Plus feature. Existing messages and your address are kept,
-            but new forwarded mail will not be processed while you are on Free.{" "}
-            <Link to="/settings#plan" className="font-semibold text-brand-700 hover:underline">
-              See plans
-            </Link>
-            .
-          </Note>
-        ) : null}
-
         {data.alias ? (
           <>
             <div className="rounded-2xl border border-brand-600/25 bg-brand-50/60 p-4">
@@ -420,7 +459,6 @@ function EmailTab() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={Boolean(plan.data && !plan.data.canUseEmailImport)}
                 onClick={() => setConfirmRotate(true)}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -439,24 +477,15 @@ function EmailTab() {
               variants such as <code className="font-mono">+netflix</code> also work, which makes it
               easy to see which service shared your address.
             </p>
-            {plan.data && !plan.data.canUseEmailImport ? (
-              <Link to="/settings#plan" className="mt-4 inline-block">
-                <Button variant="secondary">
-                  <Mail className="h-4 w-4" />
-                  Upgrade to Plus
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                className="mt-4"
-                loading={create.isPending}
-                disabled={!data.configured}
-                onClick={() => void createAlias(false)}
-              >
-                <Mail className="h-4 w-4" />
-                Create my forwarding address
-              </Button>
-            )}
+            <Button
+              className="mt-4"
+              loading={create.isPending}
+              disabled={!data.configured}
+              onClick={() => void createAlias(false)}
+            >
+              <Mail className="h-4 w-4" />
+              Create my forwarding address
+            </Button>
           </div>
         )}
       </Card>

@@ -154,6 +154,16 @@ export function useStartBillingCheckout() {
   });
 }
 
+export function useDeferPlanSelection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ deferred: boolean }>("/billing/skip"),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+}
+
 export function useVerifyBillingCheckout() {
   const refresh = useRefreshAll();
   const queryClient = useQueryClient();

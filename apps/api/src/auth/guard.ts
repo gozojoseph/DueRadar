@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { createDatabase } from "@dueradar/db";
 import type { Env } from "../env.js";
-import { forbidden, unauthorized } from "../lib/errors.js";
+import { forbidden, paymentRequired, unauthorized } from "../lib/errors.js";
 import { verifyAuthToken, type AuthUser } from "./jwt.js";
 import { sessionFromCookie } from "./session.js";
 
@@ -34,16 +34,12 @@ export function registerActiveAccountGuard(
     const result = await pool.query(
       `select p.suspended_at,
          case
-           when p.user_id is null then true
-           when p.paid_access_required and not (
-             p.plan_tier = 'plus'
-             and (
-               p.plan_grandfathered
-               or coalesce(p.plan_expires_at > now(), false)
-             )
+           when p.plan_tier = 'plus' and (
+             p.plan_grandfathered
+             or coalesce(p.plan_expires_at > now(), false)
            ) then true
            else false
-         end as requires_paid_plan
+         end as has_plus_access
        from neon_auth."user" as u
        left join public.profiles as p on p.user_id = u.id::text
        where u.id = $1::uuid
@@ -51,7 +47,7 @@ export function registerActiveAccountGuard(
       [user.id],
     );
     const account = result.rows[0] as
-      | { suspended_at: Date | string | null; requires_paid_plan: boolean }
+      | { suspended_at: Date | string | null; has_plus_access: boolean }
       | undefined;
     if (!account) {
       throw unauthorized("Your account no longer exists. Sign in again.");
@@ -61,10 +57,8 @@ export function registerActiveAccountGuard(
         "Your account is suspended. You can still export your data or delete your account.",
       );
     }
-    if (account.requires_paid_plan && !isPaidPlanExempt(request)) {
-      throw forbidden(
-        "Choose a DueRadar Plus plan to unlock this feature. Your account has no free plan or trial.",
-      );
+    if (requiresPlusForImport(request) && !account.has_plus_access) {
+      throw paymentRequired("Importing data is a DueRadar Plus feature.");
     }
   });
 }
@@ -79,19 +73,18 @@ function isSuspensionExempt(request: FastifyRequest): boolean {
   );
 }
 
-export function isPaidPlanExempt(
+export function requiresPlusForImport(
   request: Pick<FastifyRequest, "method" | "url">,
 ): boolean {
   const path = request.url.split("?")[0] ?? request.url;
-  if (path.startsWith("/api/v1/admin/")) return true;
+  if (request.method !== "POST") return false;
   return (
-    (request.method === "GET" &&
-      ["/api/v1/me", "/api/v1/billing", "/api/v1/export"].includes(path)) ||
-    (request.method === "POST" &&
-      ["/api/v1/billing/checkout", "/api/v1/billing/verify", "/api/v1/account/delete"].includes(
-        path,
-      )) ||
-    (request.method === "DELETE" && path === "/api/v1/account")
+    [
+      "/api/v1/imports/message",
+      "/api/v1/imports/csv/preview",
+      "/api/v1/imports/csv",
+      "/api/v1/email-alias",
+    ].includes(path) || /^\/api\/v1\/detections\/[^/]+\/accept$/.test(path)
   );
 }
 

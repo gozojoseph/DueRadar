@@ -1,11 +1,11 @@
 import { useEffect, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AlertTriangle, LogIn } from "lucide-react";
 import { AppShell } from "./components/AppShell";
 import { Logo } from "./components/Logo";
 import { Button, Spinner } from "./components/ui";
 import { useAuth } from "./lib/session";
-import { useMe } from "./lib/queries";
+import { useDeferPlanSelection, useMe } from "./lib/queries";
 import { DashboardPage } from "./pages/Dashboard";
 import { DetectionsPage } from "./pages/Detections";
 import { ImportPage } from "./pages/Import";
@@ -27,7 +27,7 @@ import { VerifyEmailPage } from "./pages/auth/VerifyEmail";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPassword";
 import { ResetPasswordPage } from "./pages/auth/ResetPassword";
 import { AdminPage, SuspendedAccountPage } from "./pages/Admin";
-import { BillingReturnPage, PlanRequiredPage, PlanSelectionModal } from "./pages/PlanAccess";
+import { BillingReturnPage, PlanSelectionModal } from "./pages/PlanAccess";
 
 function Splash({ label = "Loading DueRadar" }: { label?: string }) {
   return (
@@ -79,7 +79,7 @@ function SessionProblem() {
 function ProfileGate({ children }: { children: ReactNode }) {
   const me = useMe();
   const location = useLocation();
-  const navigate = useNavigate();
+  const deferPlanSelection = useDeferPlanSelection();
 
   if (me.isLoading) return <Splash label="Loading your account" />;
   if (me.isError || !me.data) return <SessionProblem />;
@@ -105,12 +105,11 @@ function ProfileGate({ children }: { children: ReactNode }) {
       return <BillingReturnPage />;
     }
     if (location.pathname === "/settings/account") return <AccountPage />;
-    if (location.pathname === "/plan-required") {
-      return <PlanRequiredPage email={me.data.profile.email} />;
-    }
     return (
       <PlanSelectionModal
-        onLater={() => navigate("/plan-required", { replace: true })}
+        onLater={async () => {
+          await deferPlanSelection.mutateAsync();
+        }}
       />
     );
   }
@@ -135,7 +134,7 @@ function Protected({ children }: { children: ReactNode }) {
 function OnboardingRoute() {
   const { status } = useAuth();
   const me = useMe(status === "authenticated");
-  const navigate = useNavigate();
+  const deferPlanSelection = useDeferPlanSelection();
 
   if (status === "loading") return <Splash label="Checking your session" />;
   if (status === "anonymous") return <Navigate to="/sign-in" replace />;
@@ -152,7 +151,9 @@ function OnboardingRoute() {
   if (me.data.requiresPaidPlan) {
     return (
       <PlanSelectionModal
-        onLater={() => navigate("/plan-required", { replace: true })}
+        onLater={async () => {
+          await deferPlanSelection.mutateAsync();
+        }}
       />
     );
   }
@@ -313,7 +314,7 @@ export default function App() {
           path="/plan-required"
           element={
             <Protected>
-              {null}
+              <Navigate to="/" replace />
             </Protected>
           }
         />

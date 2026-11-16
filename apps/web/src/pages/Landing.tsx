@@ -120,8 +120,7 @@ export function LandingPage() {
               </div>
               <p className="mt-4 flex items-center gap-1.5 text-xs text-muted">
                 <LockKeyhole className="h-3.5 w-3.5" aria-hidden />
-                New accounts require Plus; choose a plan after signup. Existing Free accounts keep
-                access.
+                Track manually on Free; Plus unlocks Paste, Email, CSV, and Screenshot imports.
               </p>
             </div>
 

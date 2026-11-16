@@ -115,6 +115,7 @@ export async function applyVerifiedPayment(
         .set({
           planTier: "plus",
           planExpiresAt: accessUntil,
+          paidAccessRequired: false,
           updatedAt: now,
         })
         .where(eq(profiles.userId, transaction.userId));

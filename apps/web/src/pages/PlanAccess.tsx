@@ -1,19 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Clock3, CreditCard, ShieldAlert } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, Check, Clock3, CreditCard } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Badge, Button, Card, LoadingBlock, Modal, Note, useToast } from "../components/ui";
 import { errorMessage } from "../lib/api";
-import { useAuth } from "../lib/session";
 import {
   useBillingPlan,
   useStartBillingCheckout,
   useVerifyBillingCheckout,
 } from "../lib/queries";
 
-export function PlanSelectionModal({ onLater }: { onLater: () => void }) {
+export function PlanSelectionModal({
+  onLater,
+}: {
+  onLater: () => void | Promise<void>;
+}) {
   const plan = useBillingPlan();
   const checkout = useStartBillingCheckout();
   const [error, setError] = useState<string | null>(null);
+  const [laterPending, setLaterPending] = useState(false);
+
+  async function deferPlanSelection() {
+    if (laterPending || checkout.isPending) return;
+    setError(null);
+    setLaterPending(true);
+    try {
+      await onLater();
+    } catch (caught) {
+      setError(errorMessage(caught));
+      setLaterPending(false);
+    }
+  }
 
   async function selectPlan(interval: "monthly" | "annual") {
     setError(null);
@@ -28,16 +44,21 @@ export function PlanSelectionModal({ onLater }: { onLater: () => void }) {
   return (
     <Modal
       open
-      onClose={onLater}
-      title="Choose a plan to continue"
-      description="New accounts need an active DueRadar Plus plan to unlock the app. There is no free plan or trial for new accounts."
+      onClose={() => void deferPlanSelection()}
+      title="Choose a plan or explore first"
+      description="Plus unlocks imports. Choose later to browse and track manually without a free trial."
       size="lg"
       footer={
         <div className="flex w-full flex-col items-center gap-2 sm:flex-row sm:justify-between">
           <p className="text-center text-xs text-muted sm:text-left">
-            Choose later keeps your account locked. Export and deletion remain available.
+            Paste, email, CSV, and screenshot imports require Plus.
           </p>
-          <Button variant="secondary" onClick={onLater}>
+          <Button
+            variant="secondary"
+            loading={laterPending}
+            disabled={checkout.isPending}
+            onClick={() => void deferPlanSelection()}
+          >
             Choose later
           </Button>
         </div>
@@ -108,67 +129,6 @@ export function PlanSelectionModal({ onLater }: { onLater: () => void }) {
         Payments are processed securely by Paystack. You’ll return to DueRadar after checkout.
       </p>
     </Modal>
-  );
-}
-
-export function PlanRequiredPage({ email }: { email: string }) {
-  const navigate = useNavigate();
-  const { signOut } = useAuth();
-  const [signOutError, setSignOutError] = useState<string | null>(null);
-
-  async function leaveAccount() {
-    setSignOutError(null);
-    try {
-      await signOut();
-      navigate("/sign-in", { replace: true });
-    } catch (caught) {
-      setSignOutError(errorMessage(caught));
-    }
-  }
-
-  return (
-    <div className="grid min-h-dvh place-items-center px-4 py-10">
-      <Card className="w-full max-w-xl p-6 sm:p-8">
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-amber-soft text-amber-strong">
-          <ShieldAlert className="h-6 w-6" aria-hidden />
-        </span>
-        <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-amber-strong">
-          Plan required
-        </p>
-        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-          Your account is waiting for a plan
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          New DueRadar accounts need an active Plus plan to use the app. There is no free plan or
-          free trial for new accounts. You are signed in as{" "}
-          <strong className="text-ink">{email}</strong>.
-        </p>
-        {signOutError ? (
-          <Note tone="error" className="mt-4">
-            {signOutError}
-          </Note>
-        ) : null}
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <Button onClick={() => navigate("/", { replace: true })}>
-            Choose a plan
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Button>
-          <Link
-            to="/settings/account"
-            className="inline-flex h-11 items-center justify-center rounded-full border border-line-strong px-5 text-sm font-semibold text-ink-soft hover:bg-paper-deep"
-          >
-            Export or delete my account
-          </Link>
-        </div>
-        <button
-          type="button"
-          onClick={() => void leaveAccount()}
-          className="mt-4 text-xs font-semibold text-muted hover:text-ink"
-        >
-          Sign out
-        </button>
-      </Card>
-    </div>
   );
 }
 

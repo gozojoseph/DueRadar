@@ -32,6 +32,7 @@ import {
 } from "../components/ui";
 import {
   useAcceptDetection,
+  useBillingPlan,
   useCategories,
   useDetectionSummary,
   useDetections,
@@ -42,6 +43,7 @@ import {
 } from "../lib/queries";
 import { errorMessage } from "../lib/api";
 import { cycleLabel, longDate, money, shortDate, timeAgo } from "../lib/format";
+import { PlanSelectionModal } from "./PlanAccess";
 import type {
   BillingCycle,
   DetectionSuggestion,
@@ -117,7 +119,17 @@ export function DetectionsPage() {
   const list = useDetections(tab);
   const reject = useRejectDetection();
   const rejectAll = useRejectAllDetections();
+  const plan = useBillingPlan();
   const toast = useToast();
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+
+  function reviewSuggestion(suggestion: DetectionSuggestion) {
+    if (plan.data?.tier !== "plus") {
+      setPlanModalOpen(true);
+      return;
+    }
+    setReviewing(suggestion);
+  }
 
   async function dismiss(suggestion: DetectionSuggestion) {
     try {
@@ -244,7 +256,7 @@ export function DetectionsPage() {
                 <SuggestionCard
                   key={suggestion.id}
                   suggestion={suggestion}
-                  onReview={() => setReviewing(suggestion)}
+                  onReview={() => reviewSuggestion(suggestion)}
                   onDismiss={() => void dismiss(suggestion)}
                   dismissing={reject.isPending}
                 />
@@ -293,6 +305,7 @@ export function DetectionsPage() {
         confirmLabel="Dismiss all"
         loading={rejectAll.isPending}
       />
+      {planModalOpen ? <PlanSelectionModal onLater={() => setPlanModalOpen(false)} /> : null}
     </div>
   );
 }

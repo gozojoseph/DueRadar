@@ -116,9 +116,8 @@ export function SignUpPage() {
           </Note>
         ) : null}
         <Note tone="info">
-          New accounts need an active DueRadar Plus plan to use the app. There is no free plan or
-          free trial for new accounts; choose monthly or annual after signing up. Existing Free-plan
-          users keep their current access.
+          You can browse and track up to five items manually without a trial. Paste, email, CSV, and
+          screenshot imports require Plus; choose a plan now or later.
         </Note>
 
         <Field label="Your name" htmlFor="signup-name">

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { billingTransactions } from "@dueradar/db/schema";
+import { billingTransactions, profiles } from "@dueradar/db/schema";
 import { requireUser, userWithEmail } from "../auth/guard.js";
 import type { Database } from "../db.js";
 import type { Env } from "../env.js";
+import { recordAudit } from "../lib/audit.js";
 import { ApiError, badRequest, conflict, notFound, parseBody } from "../lib/errors.js";
 import { ensureProfile } from "../services/profile.js";
 import { applyVerifiedPayment } from "../services/billing.js";
@@ -51,6 +52,26 @@ export async function registerBillingRoutes(
         annual: { currency: "GHS", amount: PLUS_PRICES.annual.amountGhs },
       },
     };
+  });
+
+  app.post("/api/v1/billing/skip", async (request) => {
+    const user = await requireUser(request, env);
+    const profile = await ensureProfile(db, user);
+    if (!profile.paidAccessRequired) return { deferred: true };
+
+    const [updated] = await db
+      .update(profiles)
+      .set({ paidAccessRequired: false, updatedAt: new Date() })
+      .where(eq(profiles.userId, user.id))
+      .returning({ userId: profiles.userId });
+    if (!updated) throw notFound("Profile not found.");
+    await recordAudit(db, request, {
+      userId: user.id,
+      action: "plan.selection_deferred",
+      entityType: "profile",
+      entityId: user.id,
+    });
+    return { deferred: true };
   });
 
   app.post(

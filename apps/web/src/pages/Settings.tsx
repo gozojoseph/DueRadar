@@ -540,7 +540,7 @@ export function SettingsPage() {
             <SectionTitle
               icon={<Crown className="h-4 w-4" />}
               title="Your DueRadar plan"
-              description="Plus helps you track everything and import receipts by email."
+              description="Plus unlocks unlimited active items and all import methods."
             />
             {plan.isLoading ? <LoadingBlock label="Loading your plan" /> : null}
             {plan.isError ? (
