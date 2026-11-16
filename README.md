@@ -41,6 +41,8 @@ packages/
   scheduling/ planning, queue claim/complete, delivery, retention
 docs/
   RUNBOOK.md  deploy, rollback, incident and acceptance procedures
+  DPC.md      Ghana Data Protection Commission registration pack
+  DNS.md      Resend, DMARC and app DNS records
 ```
 
 ## Local development
@@ -222,3 +224,4 @@ until Google verification/CASA, and bank/issuer adapters require verified partne
 remain distinct from confirmed charges throughout.
 
 See [docs/RUNBOOK.md](docs/RUNBOOK.md) for deploy, rollback, incident and data-request procedures.
+[docs/DPC.md](docs/DPC.md) is the Ghana Data Protection Commission registration pack and launch gate.

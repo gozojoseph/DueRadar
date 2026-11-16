@@ -149,7 +149,8 @@ notice and, where required, obtaining consent.
    relevant logs; do not copy personal data into tickets.
 3. **Notify.** Follow Ghana's Data Protection Act, 2012 (Act 843) and the Data Protection
    Commission's breach guidance. Tell affected users clearly what happened and what they should do.
-   Legal copy must not claim DPC registration is complete until it is.
+   Use the contacts and assessment steps in `docs/DPC.md`. Legal copy must not claim DPC registration
+   is complete until it is.
 4. **Recover.** Restore service, verify health, reconcile reminder jobs, and confirm no duplicate
    sends.
 5. **Review.** Write a short blameless post-incident note: cause, impact, detection, fix, follow-up.
@@ -160,6 +161,8 @@ check device registrations. Account deletion remains available even during suppo
 
 ## 11. Data subject requests
 
+- The statutory response deadline is **40 days** from receipt (Act 843 s.35(5)). Log the request date
+  and due date immediately. The full procedure is in `docs/DPC.md` section 6.
 - **Access/export:** Settings → export produces JSON for the signed-in user. Support should not
   export another account's data manually.
 - **Correction:** the user edits their own records in the app.

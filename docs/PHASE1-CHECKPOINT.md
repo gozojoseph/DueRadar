@@ -2,7 +2,7 @@
 
 Date: 2026-11-16
 Scope: M0–M2 (foundation, records and schedules, reminders and PWA)
-Status: **code complete and locally verified; M0 acceptance blocked on external accounts, DNS and real devices**
+Status: **code complete and locally verified; git initialized; deployment still blocked on domain, Render access, DNS and real devices**
 
 ## What is complete
 
@@ -67,8 +67,9 @@ technique only; production uses the real inbox.
 | Production email | no Resend key, verified sending domain, MX/inbound secret or real test inbox |
 | HTTPS/custom domain | DNS control for `dueradar.cloud` not confirmed |
 | Safari/iOS and push acceptance | no physical iPhone or Android device |
-| Docker image build | local Docker daemon cannot start; CI Docker job exists but no repository/remote yet |
-| Source control | no git repository or GitHub remote initialized |
+| Docker image build | local Docker daemon cannot start; CI Docker job exists but no remote yet |
+| Source control | local git repository initialized; GitHub remote and credentials still missing |
+| DPC registration | operating entity/TIN and DPC certificate not yet obtained; see `docs/DPC.md` |
 
 ## Decision
 
@@ -77,8 +78,10 @@ gate in `docs/RUNBOOK.md` is completed on deployed infrastructure with real devi
 
 ## Next actions
 
-1. Initialize the repository and push to GitHub so CI can validate the Docker image.
+1. Push the local `main` branch to GitHub so CI can validate the Docker image.
 2. Create the Render web service and worker from `render.yaml`; set the `sync: false` secrets.
 3. Verify `dueradar.cloud` in Resend, add SPF/DKIM/DMARC and the inbound webhook.
 4. Configure Neon Auth SMTP with Resend, trusted origins and production callbacks.
 5. Point `app.dueradar.cloud` at Render and complete the M0 checklist on real devices.
+6. Register with the DPC and publish the registration number before inviting real users; work through
+   `docs/DPC.md`.
