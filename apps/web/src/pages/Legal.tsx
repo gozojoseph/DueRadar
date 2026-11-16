@@ -171,7 +171,7 @@ export function PrivacyPage() {
             "Reminder preferences: your time zone, preferred reminder time, quiet hours, week start, email and push choices.",
             "Device data: a push endpoint and encryption keys for each browser or phone you enable, plus limited user-agent information so you can recognise the device.",
             "Delivery data: reminder jobs, delivery attempts, in-app notifications and read state.",
-            "Security data: audit events such as sign-in-independent account changes, exports and deletion, together with request metadata needed to operate the service.",
+            "Security data: account suspension status and its current reason, plus audit events for administrative actions, exports and deletion with request metadata needed to operate the service.",
           ]}
         />
       </Section>
@@ -203,6 +203,7 @@ export function PrivacyPage() {
             "To confirm DueRadar Plus purchases, grant the purchased access term, and prevent duplicate payment processing.",
             "To show your own data back to you and to enforce ownership on every read and write.",
             "To provide support when you contact us, and to investigate abuse or security incidents.",
+            "Authorized administrators may review account identity, plan and billing status, and suspension reasons; they cannot view your tracked-item details in the admin dashboard.",
             "To meet legal obligations, including responding to lawful requests and maintaining deletion records.",
           ]}
         />
@@ -407,7 +408,8 @@ export function TermsPage() {
         />
         <p>
           We may suspend or terminate an account that puts other users, the service or our providers
-          at risk. Where it is safe and lawful to do so, we will explain why.
+          at risk. Where it is safe and lawful to do so, we will explain why. While suspended, you
+          can still export your data or delete your account.
         </p>
       </Section>
 

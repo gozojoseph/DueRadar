@@ -94,6 +94,15 @@ export function AccountPage() {
         Back to settings
       </Link>
 
+      {me.data?.profile.suspendedAt ? (
+        <Note tone="warn" className="mb-5">
+          This account is suspended. Normal app features are unavailable.
+          {me.data.profile.suspensionReason
+            ? ` Reason: ${me.data.profile.suspensionReason}`
+            : ""}
+        </Note>
+      ) : null}
+
       <PageHeader
         eyebrow="Account"
         title="Export or delete your account"

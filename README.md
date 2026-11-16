@@ -128,6 +128,7 @@ See `.env.example` for the complete annotated list. The important production val
 | ----------------------- | ----------------------------------------------------------------- |
 | `DATABASE_URL`          | Neon Postgres connection string (pooled host for the app)         |
 | `NEON_AUTH_BASE_URL`    | Branch Auth base URL; proxied at `/api/auth/*`                    |
+| `ADMIN_EMAILS`          | Comma-separated verified emails allowed to use the admin dashboard |
 | `APP_ORIGIN`            | Public web origin, e.g. `https://app.dueradar.cloud`              |
 | `SERVE_WEB` / `WEB_DIST`| Enable SPA serving and point at `/app/apps/web/dist`              |
 | `RESEND_API_KEY`        | Resend key for auth mail, reminders and received-email bodies     |
@@ -153,7 +154,10 @@ Never commit `.env.local`. The repository ignores it, and `.dockerignore` keeps 
 4. Create the Render Blueprint from `render.yaml`, or create the Docker web service and worker
    manually. Set the `sync: false` variables in the Render dashboard:
    `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`,
-   `INBOUND_EMAIL_DOMAIN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`.
+   `INBOUND_EMAIL_DOMAIN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `ADMIN_EMAILS`.
+   Set `ADMIN_EMAILS` to the comma-separated address(es) of verified DueRadar accounts that
+   should administer the service. Remove an administrator from this allowlist before suspending
+   their account.
 5. Point `app.dueradar.cloud` at Render and let TLS issue.
 6. Configure Neon Auth SMTP with Resend (`smtp.resend.com`, port 465, user `resend`, the API key as
    password) so verification and reset emails come from `dueradar.cloud`.

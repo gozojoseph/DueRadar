@@ -32,6 +32,9 @@ services:
         value: "true"
       - key: SUPPORT_EMAIL
         value: support@dueradar.cloud
+      # Set to a comma-separated list of verified administrator email addresses.
+      - key: ADMIN_EMAILS
+        sync: false
       - key: EMAIL_FROM
         value: "DueRadar <reminders@dueradar.cloud>"
       - key: VAPID_SUBJECT

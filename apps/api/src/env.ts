@@ -45,6 +45,24 @@ const EnvSchema = z.object({
   NEON_AUTH_JWKS_URL: z.string().optional(),
   NEON_AUTH_ISSUER: z.string().optional(),
   NEON_AUTH_AUDIENCE: z.string().optional(),
+  ADMIN_EMAILS: z.string().default("").transform((value, context) => {
+    const emails = [
+      ...new Set(
+        value
+          .split(",")
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    const invalid = emails.filter((email) => !z.email().safeParse(email).success);
+    if (invalid.length > 0) {
+      context.addIssue({
+        code: "custom",
+        message: `ADMIN_EMAILS contains invalid email address(es): ${invalid.join(", ")}`,
+      });
+    }
+    return emails;
+  }),
   COOKIE_SECURE: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),

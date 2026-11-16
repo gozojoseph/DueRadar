@@ -7,6 +7,9 @@ import {
 import { api } from "./api";
 import type {
   CalendarData,
+  AdminBillingTransaction,
+  AdminOverview,
+  AdminUser,
   BillingPlan,
   Category,
   Config,
@@ -58,12 +61,72 @@ export function useRefreshAll() {
   };
 }
 
-export function useMe() {
+export function useMe(enabled = true) {
   return useQuery({
     queryKey: ["me"],
     queryFn: () => api.get<MeResponse>("/me"),
+    enabled,
     staleTime: 30_000,
     retry: 1,
+  });
+}
+
+export function useAdminOverview() {
+  return useQuery({
+    queryKey: ["admin", "overview"],
+    queryFn: () => api.get<AdminOverview>("/admin/overview"),
+    staleTime: 30_000,
+  });
+}
+
+export function useAdminUsers(
+  filters: { search: string; limit: number; offset: number },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["admin", "users", filters],
+    enabled,
+    queryFn: () =>
+      api.get<{ users: AdminUser[]; total: number; limit: number; offset: number }>(
+        "/admin/users",
+        filters,
+      ),
+    staleTime: 15_000,
+  });
+}
+
+export function useAdminBilling(filters: {
+  search: string;
+  status: "all" | "pending" | "paid" | "failed";
+  limit: number;
+  offset: number;
+}, enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "billing", filters],
+    enabled,
+    queryFn: () =>
+      api.get<{
+        transactions: AdminBillingTransaction[];
+        total: number;
+        limit: number;
+        offset: number;
+      }>("/admin/billing", filters),
+    staleTime: 15_000,
+  });
+}
+
+export function useSetAccountSuspension() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; suspended: boolean; reason: string }) =>
+      api.patch<{ user: Pick<AdminUser, "userId" | "suspendedAt" | "suspensionReason"> }>(
+        `/admin/users/${input.userId}/suspension`,
+        { suspended: input.suspended, reason: input.reason },
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
   });
 }
 

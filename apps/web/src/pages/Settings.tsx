@@ -29,7 +29,6 @@ import {
   Note,
   PageHeader,
   Select,
-  Switch,
   cx,
   useToast,
 } from "../components/ui";
@@ -93,6 +92,69 @@ const SECTION_LINKS = [
   { href: "#payment-methods", label: "Payment methods" },
   { href: "#data", label: "Data & privacy" },
 ];
+
+function ReminderToggle({
+  id,
+  checked,
+  onChange,
+  label,
+  description,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3.5">
+      <div className="min-w-0">
+        <p id={`${id}-label`} className="text-sm font-semibold text-ink">
+          {label}
+        </p>
+        <p id={`${id}-description`} className="mt-0.5 text-xs leading-relaxed text-muted">
+          {description}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className={cx(
+            "w-7 text-right text-xs font-semibold",
+            checked ? "text-brand-800" : "text-muted",
+          )}
+        >
+          {checked ? "On" : "Off"}
+        </span>
+        <button
+          id={id}
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={`${id}-label`}
+          aria-describedby={`${id}-description`}
+          onClick={() => onChange(!checked)}
+          className="relative h-11 w-14 shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-700/25"
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              "absolute left-1 top-1/2 h-7 w-12 -translate-y-1/2 rounded-full transition-colors motion-reduce:transition-none",
+              checked ? "bg-brand-700" : "bg-line-strong",
+            )}
+          />
+          <span
+            aria-hidden="true"
+            className={cx(
+              "absolute left-2 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-md ring-1 ring-black/10 transition-transform motion-reduce:transition-none",
+              checked ? "translate-x-5" : "translate-x-0",
+            )}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const me = useMe();
@@ -692,7 +754,8 @@ export function SettingsPage() {
             </div>
 
             <div className="mt-3 divide-y divide-line/70 rounded-xl border border-line px-4">
-              <Switch
+              <ReminderToggle
+                id="settings-email-reminders"
                 checked={reminderForm.emailReminders}
                 onChange={(next) =>
                   setReminderForm((current) => ({ ...current, emailReminders: next }))
@@ -704,7 +767,8 @@ export function SettingsPage() {
                     : `Sent to ${profile?.email ?? "your account email"}.`
                 }
               />
-              <Switch
+              <ReminderToggle
+                id="settings-push-reminders"
                 checked={reminderForm.pushReminders}
                 onChange={(next) =>
                   setReminderForm((current) => ({ ...current, pushReminders: next }))

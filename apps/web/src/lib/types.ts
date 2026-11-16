@@ -27,6 +27,8 @@ export interface Profile {
   planTier: "free" | "plus";
   planExpiresAt: string | null;
   planGrandfathered: boolean;
+  suspendedAt: string | null;
+  suspensionReason: string | null;
   onboardedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -205,6 +207,43 @@ export interface MeResponse {
   user: { id: string; email: string; name: string | null };
   profile: Profile;
   needsOnboarding: boolean;
+  isAdmin: boolean;
+}
+
+export interface AdminOverview {
+  totalUsers: number;
+  activeItems: number;
+  plusMembers: number;
+  paidTransactions: number;
+  pendingPayments: number;
+  grossPaidMinor: string;
+}
+
+export interface AdminUser {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  plan: "free" | "plus";
+  planExpiresAt: string | null;
+  planGrandfathered: boolean;
+  suspendedAt: string | null;
+  suspensionReason: string | null;
+  createdAt: string;
+  activeItems: number;
+}
+
+export interface AdminBillingTransaction {
+  id: string;
+  userId: string;
+  email: string | null;
+  reference: string;
+  interval: "monthly" | "annual";
+  amountMinor: number;
+  currency: string;
+  status: "pending" | "paid" | "failed";
+  paidAt: string | null;
+  accessUntil: string | null;
+  createdAt: string;
 }
 
 export interface CalendarData {

@@ -9,13 +9,14 @@ import {
   Plus,
   Receipt,
   Settings,
+  ShieldCheck,
   Upload,
   WifiOff,
   X,
 } from "lucide-react";
 import { Wordmark } from "./Logo";
 import { Badge, Button, Modal, cx } from "./ui";
-import { useDetectionSummary, useNotifications } from "../lib/queries";
+import { useDetectionSummary, useMe, useNotifications } from "../lib/queries";
 import { useInstallPrompt, useOnline } from "../lib/usePwa";
 
 const NAV_ITEMS = [
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
 ] as const;
 
 const MOBILE_NAV_ITEMS = NAV_ITEMS.slice(0, 5);
+const ADMIN_NAV_ITEM = { to: "/admin", label: "Admin", icon: ShieldCheck };
 
 function NavItem({
   to,
@@ -83,6 +85,7 @@ function NavItem({
 export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnline();
   const location = useLocation();
+  const me = useMe();
   const notifications = useNotifications();
   const detections = useDetectionSummary();
   const { canInstall, canPrompt, isIos, installed, dismissed, install, dismiss } = useInstallPrompt();
@@ -112,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </NavLink>
 
           <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Primary">
-            {NAV_ITEMS.map((item) => (
+            {[...NAV_ITEMS, ...(me.data?.isAdmin ? [ADMIN_NAV_ITEM] : [])].map((item) => (
               <NavItem key={item.to} {...item} unread={badgeFor(item.to)} />
             ))}
           </nav>
@@ -193,7 +196,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-label="Primary"
       >
         <div className="mx-auto flex max-w-md items-stretch">
-          {MOBILE_NAV_ITEMS.map((item) => (
+          {[...MOBILE_NAV_ITEMS, ...(me.data?.isAdmin ? [ADMIN_NAV_ITEM] : [])].map((item) => (
             <NavItem key={item.to} {...item} mobile unread={badgeFor(item.to)} />
           ))}
         </div>

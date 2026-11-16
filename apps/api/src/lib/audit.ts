@@ -1,10 +1,10 @@
 import type { FastifyRequest } from "fastify";
 import { createHash } from "node:crypto";
 import { auditEvents } from "@dueradar/db/schema";
-import type { Database } from "../db.js";
+import type { DatabaseExecutor } from "@dueradar/db";
 
 export async function recordAudit(
-  db: Database,
+  db: DatabaseExecutor,
   request: FastifyRequest,
   event: {
     userId: string | null;

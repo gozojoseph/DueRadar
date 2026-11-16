@@ -26,6 +26,7 @@ import { SignUpPage } from "./pages/auth/SignUp";
 import { VerifyEmailPage } from "./pages/auth/VerifyEmail";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPassword";
 import { ResetPasswordPage } from "./pages/auth/ResetPassword";
+import { AdminPage, SuspendedAccountPage } from "./pages/Admin";
 
 function Splash({ label = "Loading DueRadar" }: { label?: string }) {
   return (
@@ -76,9 +77,24 @@ function SessionProblem() {
 
 function ProfileGate({ children }: { children: ReactNode }) {
   const me = useMe();
+  const location = useLocation();
 
   if (me.isLoading) return <Splash label="Loading your account" />;
   if (me.isError || !me.data) return <SessionProblem />;
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  if (isAdminRoute && !me.data.isAdmin) return <Navigate to="/" replace />;
+  if (
+    me.data.profile.suspendedAt &&
+    location.pathname !== "/settings/account" &&
+    !(isAdminRoute && me.data.isAdmin)
+  ) {
+    return (
+      <SuspendedAccountPage
+        email={me.data.profile.email}
+        reason={me.data.profile.suspensionReason}
+      />
+    );
+  }
   if (me.data.needsOnboarding) return <Navigate to="/onboarding" replace />;
 
   return <AppShell>{children}</AppShell>;
@@ -97,9 +113,20 @@ function Protected({ children }: { children: ReactNode }) {
 
 function OnboardingRoute() {
   const { status } = useAuth();
+  const me = useMe(status === "authenticated");
 
   if (status === "loading") return <Splash label="Checking your session" />;
   if (status === "anonymous") return <Navigate to="/sign-in" replace />;
+  if (me.isLoading) return <Splash label="Loading your account" />;
+  if (me.isError || !me.data) return <SessionProblem />;
+  if (me.data.profile.suspendedAt) {
+    return (
+      <SuspendedAccountPage
+        email={me.data.profile.email}
+        reason={me.data.profile.suspensionReason}
+      />
+    );
+  }
   return <OnboardingPage />;
 }
 
@@ -234,6 +261,14 @@ export default function App() {
           element={
             <Protected>
               <AccountPage />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <Protected>
+              <AdminPage />
             </Protected>
           }
         />

@@ -3,6 +3,7 @@ import type { Database } from "../db.js";
 import type { Env } from "../env.js";
 import type { Clients } from "../lib/clients.js";
 import { registerAccountRoutes } from "./account.js";
+import { registerAdminRoutes } from "./admin.js";
 import { registerAuthProxy } from "./auth-proxy.js";
 import { registerBillingRoutes } from "./billing.js";
 import { registerCategoryRoutes } from "./categories.js";
@@ -33,6 +34,7 @@ export async function registerRoutes(
 ): Promise<void> {
   await registerConfigRoutes(app, deps.env);
   await registerAuthProxy(app, deps.env);
+  await registerAdminRoutes(app, deps);
   await registerBillingRoutes(app, deps);
   await registerWebhookRoutes(app, deps);
   await registerProfileRoutes(app, deps);

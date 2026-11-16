@@ -9,6 +9,7 @@ import { recordAudit } from "../lib/audit.js";
 import { onboardingSchema, profileUpdateSchema } from "../schemas.js";
 import { ensureProfile, listCategories } from "../services/profile.js";
 import { resyncUserReminders } from "@dueradar/scheduling";
+import { isAdminUser } from "../services/admin.js";
 
 export async function registerProfileRoutes(
   app: FastifyInstance,
@@ -23,6 +24,7 @@ export async function registerProfileRoutes(
       user: { id: user.id, email: profile.email, name: profile.displayName },
       profile,
       needsOnboarding: !profile.onboardedAt,
+      isAdmin: await isAdminUser(db, env, user.id),
     };
   });
 

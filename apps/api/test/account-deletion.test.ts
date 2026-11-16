@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { registerActiveAccountGuard } from "../src/auth/guard.js";
+import { registerActiveAccountGuard, requireUser } from "../src/auth/guard.js";
 import { sessionFromCookie } from "../src/auth/session.js";
 import type { Database } from "../src/db.js";
 import { loadEnv } from "../src/env.js";
@@ -63,14 +63,28 @@ async function tokenFor(userId: string): Promise<string> {
     .sign(privateKey);
 }
 
-async function buildGuardedApp(rowCount: number): Promise<FastifyInstance> {
+async function buildGuardedApp(
+  rowCount: number,
+  suspendedAt: Date | null = null,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const pool = {
-    query: vi.fn(async () => ({ rowCount })),
+    query: vi.fn(async () => ({
+      rowCount,
+      rows: rowCount > 0 ? [{ suspended_at: suspendedAt }] : [],
+    })),
   };
 
   registerActiveAccountGuard(app, env, pool as never);
-  app.get("/api/v1/probe", async () => ({ ok: true }));
+  app.get("/api/v1/probe", async (request) => {
+    await requireUser(request, env);
+    return { ok: true };
+  });
+  app.get("/api/v1/me", async () => ({ ok: true }));
+  app.get("/api/v1/export", async () => ({ ok: true }));
+  app.delete("/api/v1/account", async () => ({ ok: true }));
+  app.post("/api/v1/account/delete", async () => ({ ok: true }));
+  app.get("/api/v1/admin/users", async () => ({ ok: true }));
   app.setErrorHandler((error, _request, reply) => {
     const statusCode = error instanceof ApiError ? error.statusCode : 500;
     const message = error instanceof Error ? error.message : "Request failed.";
@@ -117,9 +131,16 @@ describe("deleted account access", () => {
     expect(response.json()).toEqual({ ok: true });
   });
 
-  it("leaves cookie-based requests to Neon Auth", async () => {
+  it("checks active cookie sessions against the auth user row", async () => {
     const app = await buildGuardedApp(0);
     apps.push(app);
+    const authFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ user: { id: USER_ID, email: "tester@example.test" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", authFetch);
 
     const response = await app.inject({
       method: "GET",
@@ -127,7 +148,63 @@ describe("deleted account access", () => {
       headers: { cookie: "better-auth.session_token=anything" },
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(401);
+    expect(authFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks suspended users from normal API routes", async () => {
+    const app = await buildGuardedApp(1, new Date());
+    apps.push(app);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/probe",
+      headers: { authorization: `Bearer ${await tokenFor(USER_ID)}` },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { message: /account is suspended/i } });
+  });
+
+  it("blocks suspended cookie sessions from normal API routes", async () => {
+    const app = await buildGuardedApp(1, new Date());
+    apps.push(app);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ user: { id: USER_ID, email: "tester@example.test" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/probe",
+      headers: { cookie: "better-auth.session_token=anything" },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("preserves profile, export, deletion, and admin endpoints for suspended users", async () => {
+    const app = await buildGuardedApp(1, new Date());
+    apps.push(app);
+    const authorization = `Bearer ${await tokenFor(USER_ID)}`;
+
+    const requests = [
+      { method: "GET", url: "/api/v1/me" },
+      { method: "GET", url: "/api/v1/export" },
+      { method: "DELETE", url: "/api/v1/account" },
+      { method: "POST", url: "/api/v1/account/delete" },
+      { method: "GET", url: "/api/v1/admin/users" },
+    ] as const;
+
+    for (const request of requests) {
+      const response = await app.inject({ ...request, headers: { authorization } });
+      expect(response.statusCode, request.url).toBe(200);
+    }
   });
 
   it("does not recreate a profile for a deleted auth user", async () => {
