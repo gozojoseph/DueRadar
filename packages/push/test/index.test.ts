@@ -3,13 +3,24 @@ import webpush from "web-push";
 import { createPushClient, validatePushEndpoint } from "../src/index.js";
 
 describe("createPushClient", () => {
-  it("bounds each outgoing push request", async () => {
+  it("uses Node's all-address DNS callback and bounds each outgoing push request", async () => {
     const keys = webpush.generateVAPIDKeys();
-    const sendNotification = vi.spyOn(webpush, "sendNotification").mockResolvedValue({
-      statusCode: 201,
-      body: "",
-      headers: {},
-    });
+    const sendNotification = vi
+      .spyOn(webpush, "sendNotification")
+      .mockImplementation(async (_subscription, _payload, options) => {
+        const lookup = options?.agent?.options.lookup;
+        if (!lookup) throw new Error("Pinned endpoint lookup is missing.");
+
+        const resolved = await new Promise<unknown>((resolve, reject) => {
+          lookup("8.8.8.8", { all: true }, (error, address) => {
+            if (error) reject(error);
+            else resolve(address);
+          });
+        });
+        expect(resolved).toEqual([{ address: "8.8.8.8", family: 4 }]);
+
+        return { statusCode: 201, body: "", headers: {} };
+      });
     const client = createPushClient({
       publicKey: keys.publicKey,
       privateKey: keys.privateKey,

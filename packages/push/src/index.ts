@@ -138,12 +138,20 @@ export function createPushClient(config: PushClientConfig) {
         "Push endpoint DNS resolution timed out.",
       );
       agent = new https.Agent({
-        lookup: (hostname, _options, callback) => {
+        lookup: (hostname, options, callback) => {
           if (hostname.replace(/^\[|\]$/g, "").toLowerCase() !== resolved.hostname) {
-            callback(new Error("Unexpected push endpoint hostname"), "", 0);
+            if (options.all) {
+              callback(new Error("Unexpected push endpoint hostname"), []);
+            } else {
+              callback(new Error("Unexpected push endpoint hostname"), "", 0);
+            }
             return;
           }
-          callback(null, resolved.address, resolved.family);
+          if (options.all) {
+            callback(null, [{ address: resolved.address, family: resolved.family }]);
+          } else {
+            callback(null, resolved.address, resolved.family);
+          }
         },
       });
       const response = await webpush.sendNotification(
