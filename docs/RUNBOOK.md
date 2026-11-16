@@ -109,6 +109,16 @@ errors.
   subscription, or a worker that cannot reach Neon. Check the worker log first, then Resend, then the
   database connection count.
 
+**Push troubleshooting.** The Settings test push is sent by the web/API service; scheduled reminders
+are sent by the worker. Both Render services must have the same valid `VAPID_PUBLIC_KEY` and
+`VAPID_PRIVATE_KEY` pair. `pushConfigured: true` confirms only that both values exist on the web/API
+service, not that they match or that the worker has them. HTTP 401/403 from the test indicates VAPID
+authentication was rejected; verify the pair and re-register the browser if keys changed. HTTP
+404/410 means the browser subscription expired; remove the device and enable push again. If the test
+is accepted but no notification appears, check the browser's site-notification permission and the
+phone's notification settings. If test push works but scheduled reminders do not, check the worker's
+`pushConfigured` startup log, push-reminder preference, and `Reminder delivery failed` logs.
+
 ## 7. Email, forwarding and detection
 
 **Sending.** Resend verifies the sending domain; keep SPF, DKIM and DMARC intact. Never send from an

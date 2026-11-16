@@ -414,9 +414,14 @@ export function SettingsPage() {
       if (result.sent === 0) {
         toast(
           result.failed > 0
-            ? "Push failed for every device. Check the browser permission."
+            ? result.failures[0]?.reason ?? "Push failed for every registered device."
             : "No push-enabled devices yet.",
           "error",
+        );
+      } else if (result.failed > 0) {
+        toast(
+          `Test sent to ${result.sent} device${result.sent === 1 ? "" : "s"}; ${result.failed} failed: ${result.failures[0]?.reason ?? "delivery failed."}`,
+          "info",
         );
       } else {
         toast(`Test sent to ${result.sent} ${result.sent === 1 ? "device" : "devices"}.`);

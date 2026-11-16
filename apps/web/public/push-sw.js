@@ -27,7 +27,9 @@ self.addEventListener("push", (event) => {
     data: { url },
     tag,
     renotify: Boolean(tag),
-    requireInteraction: false,
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200],
     actions: [{ action: "open", title: "Open DueRadar" }],
   };
 

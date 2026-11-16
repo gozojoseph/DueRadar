@@ -443,7 +443,12 @@ export function useTestEmail() {
 
 export function useTestPush() {
   return useMutation({
-    mutationFn: () => api.post<{ sent: number; failed: number }>("/test/push", { channel: "push" }),
+    mutationFn: () =>
+      api.post<{
+        sent: number;
+        failed: number;
+        failures: Array<{ platform: string | null; statusCode: number | null; reason: string }>;
+      }>("/test/push", { channel: "push" }),
   });
 }
 

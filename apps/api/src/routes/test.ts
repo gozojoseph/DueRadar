@@ -10,6 +10,24 @@ import { ensureProfile } from "../services/profile.js";
 import { testChannelSchema } from "../schemas.js";
 import { recordAudit } from "../lib/audit.js";
 
+export function describePushFailure(statusCode: number | undefined): string {
+  if (statusCode === 401 || statusCode === 403) {
+    return "The push provider rejected VAPID authentication. Check that the server key pair matches the key used for this subscription.";
+  }
+  if (statusCode === 404 || statusCode === 410) {
+    return "This push subscription has expired. Remove this device and enable push again.";
+  }
+  if (statusCode === 429) {
+    return "The push provider rate-limited the request. Try again later.";
+  }
+  if (statusCode !== undefined && Number.isFinite(statusCode)) {
+    return statusCode >= 500
+      ? `The push provider returned HTTP ${statusCode}. Try again later.`
+      : `The push provider rejected the request with HTTP ${statusCode}.`;
+  }
+  return "Could not reach the push provider. Check the server's network and DNS connectivity.";
+}
+
 export async function registerTestRoutes(
   app: FastifyInstance,
   deps: { env: Env; db: Database; clients: Clients },
@@ -60,6 +78,11 @@ export async function registerTestRoutes(
 
       let sent = 0;
       let failed = 0;
+      const failures: Array<{
+        platform: string | null;
+        statusCode: number | null;
+        reason: string;
+      }> = [];
       for (const device of rows) {
         const result = await clients.push.send(
           { endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth },
@@ -71,15 +94,29 @@ export async function registerTestRoutes(
           },
         );
         if (result.ok) sent += 1;
-        else failed += 1;
+        else {
+          failed += 1;
+          failures.push({
+            platform: device.platform,
+            statusCode:
+              result.statusCode !== undefined && Number.isFinite(result.statusCode)
+                ? result.statusCode
+                : null,
+            reason: describePushFailure(result.statusCode),
+          });
+        }
       }
 
       await recordAudit(db, request, {
         userId: user.id,
         action: "test.push",
-        metadata: { sent, failed },
+        metadata: {
+          sent,
+          failed,
+          failureStatusCodes: failures.map((failure) => failure.statusCode),
+        },
       });
-      return { sent, failed };
+      return { sent, failed, failures };
     },
   );
 }
