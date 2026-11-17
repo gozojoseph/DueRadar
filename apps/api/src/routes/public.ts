@@ -15,6 +15,25 @@ export interface PublicRouteOptions {
 export async function registerPublicRoutes(app: FastifyInstance, opts: PublicRouteOptions): Promise<void> {
   const { webRoot } = opts;
 
+  // --- Android TWA app-link verification ------------------------------------
+  // Bubblewrap/TWA verification requires /.well-known/assetlinks.json on the
+  // app's domain. fastifyStatic does not serve dotfile paths, so this route
+  // reads the file from the web build's public dir instead. Served no-cache so
+  // fingerprint updates (e.g. after enabling Play App Signing) go live fast.
+  app.get("/.well-known/assetlinks.json", async (_request, reply) => {
+    try {
+      const body = readFileSync(resolve(webRoot, ".well-known", "assetlinks.json"), "utf8");
+      return reply
+        .code(200)
+        .type("application/json; charset=utf-8")
+        .header("Cache-Control", "no-cache")
+        .send(body);
+    } catch {
+      // File not present yet (no TWA build deployed) - plain 404.
+      return reply.code(404).send();
+    }
+  });
+
   // --- landing HTML shell ----------------------------------------------------
   // The prerendered landing page is served at GET / ahead of the SPA fallback so
   // crawlers (and users without JS) receive the real heading, description,

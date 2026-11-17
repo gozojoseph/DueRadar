@@ -34,6 +34,7 @@ import {
   useToast,
 } from "../components/ui";
 import { PlanSelectionModal } from "./PlanAccess";
+import { isAndroidApp } from "../lib/android";
 import {
   useCreateEmailAlias,
   useBillingPlan,
@@ -89,6 +90,7 @@ export function ImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const plan = useBillingPlan();
+  const androidApp = isAndroidApp();
 
   function showResult(next: ImportResult) {
     setResult(next);
@@ -156,30 +158,33 @@ export function ImportPage() {
           <div className="mb-4">
             <h2 className="text-base font-semibold text-ink">Choose an import method</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Paste, email, CSV, and screenshot imports are DueRadar Plus features. Choose any
-              method to view the plans. You can still browse and track items manually.
+              {androidApp
+                ? "Paste, email, CSV, and screenshot imports are DueRadar Plus features. You can still browse and track items manually."
+                : "Paste, email, CSV, and screenshot imports are DueRadar Plus features. Choose any method to view the plans. You can still browse and track items manually."}
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              { label: "Paste", icon: ClipboardPaste },
-              { label: "Forward email", icon: Mail },
-              { label: "Gmail", icon: Mail },
-              { label: "CSV", icon: FileSpreadsheet },
-              { label: "Screenshot", icon: Camera },
-            ].map(({ label, icon: Icon }) => (
-              <Button
-                key={label}
-                variant="secondary"
-                fullWidth
-                className="justify-start"
-                onClick={() => setPlanModalOpen(true)}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {label}
-              </Button>
-            ))}
-          </div>
+          {androidApp ? null : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { label: "Paste", icon: ClipboardPaste },
+                { label: "Forward email", icon: Mail },
+                { label: "Gmail", icon: Mail },
+                { label: "CSV", icon: FileSpreadsheet },
+                { label: "Screenshot", icon: Camera },
+              ].map(({ label, icon: Icon }) => (
+                <Button
+                  key={label}
+                  variant="secondary"
+                  fullWidth
+                  className="justify-start"
+                  onClick={() => setPlanModalOpen(true)}
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {label}
+                </Button>
+              ))}
+            </div>
+          )}
         </Card>
       ) : null}
 

@@ -5,8 +5,15 @@ import { BrowserRouter } from "react-router-dom";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App";
 import { ToastProvider } from "./components/ui";
+import { markAndroidApp } from "./lib/android";
 import { AuthProvider } from "./lib/session";
 import "./index.css";
+
+// The Play Store (TWA) build launches at /?src=play; persist the Android flag
+// before any component renders so billing UI is hidden from the first paint.
+if (new URLSearchParams(window.location.search).get("src") === "play") {
+  markAndroidApp();
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

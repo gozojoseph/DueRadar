@@ -16,3 +16,6 @@ Thumbs.db
 .turbo/
 apps/web/dist/
 apps/web/dev-dist/
+# Android TWA build (Bubblewrap): keystore, AAB/APK, generated project.
+# Revisit before committing twa-manifest.json deliberately.
+apps/android/

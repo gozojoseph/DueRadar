@@ -51,6 +51,7 @@ import {
   useUpdateProfile,
   useVerifyBillingCheckout,
 } from "../lib/queries";
+import { isAndroidApp } from "../lib/android";
 import { pushSupported, subscribeToPush, unsubscribeFromPush } from "../lib/push";
 
 const TIMEZONES = [
@@ -168,6 +169,7 @@ export function SettingsPage() {
   const registerDevice = useRegisterDevice();
   const removeDevice = useRemoveDevice();
   const startBillingCheckout = useStartBillingCheckout();
+  const androidApp = isAndroidApp();
   const verifyBillingCheckout = useVerifyBillingCheckout();
   const markNotifications = useMarkNotificationsRead();
   const { signOut } = useAuth();
@@ -539,7 +541,7 @@ export function SettingsPage() {
                     ? `${plan.data.activeItems} active items · no limit`
                     : `${plan.data.activeItems} of ${plan.data.activeItemLimit} active items used`}
                 </p>
-                {!plan.data.grandfathered ? (
+                {!plan.data.grandfathered && !androidApp ? (
                   <>
                     {!plan.data.configured ? (
                       <Note tone="warn" className="mt-4">

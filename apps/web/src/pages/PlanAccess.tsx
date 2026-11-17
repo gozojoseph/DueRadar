@@ -8,6 +8,7 @@ import {
   useStartBillingCheckout,
   useVerifyBillingCheckout,
 } from "../lib/queries";
+import { isAndroidApp } from "../lib/android";
 
 export function PlanSelectionModal({
   onLater,
@@ -18,6 +19,7 @@ export function PlanSelectionModal({
   const checkout = useStartBillingCheckout();
   const [error, setError] = useState<string | null>(null);
   const [laterPending, setLaterPending] = useState(false);
+  const androidApp = isAndroidApp();
 
   async function deferPlanSelection() {
     if (laterPending || checkout.isPending) return;
@@ -29,6 +31,60 @@ export function PlanSelectionModal({
       setError(errorMessage(caught));
       setLaterPending(false);
     }
+  }
+
+  // The Play build must not offer external purchases (Google Play Payments
+  // policy): show current plan status only - no prices, no checkout buttons,
+  // no payment-provider mentions. "Continue" defers plan selection so free
+  // users can keep using the app.
+  if (androidApp) {
+    return (
+      <Modal
+        open
+        onClose={() => void deferPlanSelection()}
+        title="Your plan"
+        description="Browse and track your bills without a paid plan."
+        size="lg"
+        footer={
+          <div className="flex w-full justify-center">
+            <Button
+              variant="secondary"
+              loading={laterPending}
+              onClick={() => void deferPlanSelection()}
+            >
+              Continue
+            </Button>
+          </div>
+        }
+      >
+        {plan.isLoading ? <LoadingBlock label="Loading your plan" /> : null}
+        {plan.isError ? (
+          <Note tone="error" className="mb-4">
+            Could not load your plan. {errorMessage(plan.error)}
+          </Note>
+        ) : null}
+        {error ? (
+          <Note tone="error" className="mb-4">
+            {error}
+          </Note>
+        ) : null}
+        {plan.data ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={plan.data.tier === "plus" ? "brand" : "slate"}>
+              {plan.data.tier === "plus" ? "DueRadar Plus" : "Free plan"}
+            </Badge>
+            <p className="text-sm text-ink-soft">
+              {plan.data.activeItemLimit === null
+                ? `${plan.data.activeItems} active items · no limit`
+                : `${plan.data.activeItems} of ${plan.data.activeItemLimit} active items used`}
+            </p>
+          </div>
+        ) : null}
+        <p className="mt-4 text-xs leading-relaxed text-muted">
+          Paste, email, CSV, and screenshot imports are Plus features.
+        </p>
+      </Modal>
+    );
   }
 
   async function selectPlan(interval: "monthly" | "annual") {
