@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cloud.dueradar.app",
+      "sha256_cert_fingerprints": [
+        "E7:22:D4:5F:0B:5D:75:92:4C:43:E1:B7:7D:0F:D7:7B:E2:F6:F8:E0:B8:DC:0E:08:BF:0F:9E:4F:A5:F2:39:89"
+      ]
+    }
+  }
+]
