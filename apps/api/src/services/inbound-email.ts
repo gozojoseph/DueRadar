@@ -8,6 +8,7 @@ import {
   createMessageImport,
   type MessageImportResult,
 } from "./detection.js";
+import { createDetectionNotifier } from "./detection-notify.js";
 import type { DraftEnhancer } from "./llm-detect.js";
 import { getPlanAccess } from "./plan.js";
 import {
@@ -325,6 +326,7 @@ export async function processInboundEmail(
     };
   }
 
+  const notifier = createDetectionNotifier(db, alias.userId, env);
   const result = await createMessageImport(
     db,
     alias.userId,
@@ -337,7 +339,12 @@ export async function processInboundEmail(
       aliasId: alias.id,
       metadata: { ...metadata, attachmentCount: body.attachmentCount },
     },
-    { retentionHours: env.DETECTION_RAW_RETENTION_HOURS, enhance },
+    {
+      retentionHours: env.DETECTION_RAW_RETENTION_HOURS,
+      enhance,
+      onNewDetections: (fresh) =>
+        notifier.notify({ sourceLabel: "a forwarded email", suggestions: fresh }),
+    },
   );
 
   await touchAlias(db, alias.id);

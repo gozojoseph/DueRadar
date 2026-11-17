@@ -5,8 +5,10 @@ import {
   redactSenderAddress,
   retentionUntil,
   suggestionToSubscriptionInput,
+  type SuggestionDto,
   type SuggestionPayload,
 } from "../src/services/detection.js";
+import { buildDetectionNotification } from "../src/services/detection-notify.js";
 
 const HOUR_MS = 3_600_000;
 
@@ -174,5 +176,39 @@ describe("suggestionToSubscriptionInput", () => {
       cycle: "annual",
       anchorDate: "2027-01-15",
     });
+  });
+});
+
+describe("buildDetectionNotification", () => {
+  function suggestionOf(kind: DetectionDraft["kind"]): SuggestionDto {
+    const payload = draft({
+      kind,
+      ...(kind === "trial" ? { amountMinor: 0, trialEndsAt: "2026-11-30" } : {}),
+    });
+    return { draft: payload } as unknown as SuggestionDto;
+  }
+
+  it("summarises a single detection with the right pronouns", () => {
+    const copy = buildDetectionNotification([suggestionOf("trial")], "your Gmail");
+    expect(copy.title).toBe("1 new item to review");
+    expect(copy.body).toBe(
+      "DueRadar detected a free trial in your Gmail. Open Review to check it.",
+    );
+  });
+
+  it("batches mixed kinds into one notification, never one per detection", () => {
+    const copy = buildDetectionNotification(
+      [
+        suggestionOf("subscription"),
+        suggestionOf("bill"),
+        suggestionOf("trial"),
+        suggestionOf("trial"),
+      ],
+      "your CSV import",
+    );
+    expect(copy.title).toBe("4 new items to review");
+    expect(copy.body).toBe(
+      "DueRadar detected a subscription charge, a bill, 2 free trials in your CSV import. Open Review to check them.",
+    );
   });
 });

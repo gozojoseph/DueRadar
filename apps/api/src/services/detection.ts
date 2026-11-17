@@ -222,8 +222,9 @@ async function persistDrafts(
   userId: string,
   importId: string,
   entries: DraftToPersist[],
-): Promise<SuggestionDto[]> {
+): Promise<{ suggestions: SuggestionDto[]; fresh: SuggestionDto[] }> {
   const saved: SuggestionDto[] = [];
+  const fresh: SuggestionDto[] = [];
 
   for (const entry of entries) {
     const payload: SuggestionPayload = entry.transactions
@@ -244,7 +245,9 @@ async function persistDrafts(
       .returning();
 
     if (inserted) {
-      saved.push(toSuggestionDto(inserted));
+      const dto = toSuggestionDto(inserted);
+      saved.push(dto);
+      fresh.push(dto);
       continue;
     }
 
@@ -282,7 +285,7 @@ async function persistDrafts(
     }
   }
 
-  return saved;
+  return { suggestions: saved, fresh };
 }
 
 async function runWithImport(
@@ -301,7 +304,7 @@ async function runWithImport(
     processedAt?: Date | null;
   },
   drafts: DraftToPersist[],
-): Promise<{ row: Import; suggestions: SuggestionDto[] }> {
+): Promise<{ row: Import; suggestions: SuggestionDto[]; fresh: SuggestionDto[] }> {
   const [row] = await db
     .insert(imports)
     .values({
@@ -321,14 +324,14 @@ async function runWithImport(
   if (!row) throw new Error("Failed to save import");
 
   try {
-    const suggestions = await persistDrafts(db, input.userId, row.id, drafts);
+    const { suggestions, fresh } = await persistDrafts(db, input.userId, row.id, drafts);
     if (suggestions.length > 0 && row.metadata) {
       await db
         .update(imports)
         .set({ metadata: { ...row.metadata, suggestions: suggestions.length } })
         .where(eq(imports.id, row.id));
     }
-    return { row, suggestions };
+    return { row, suggestions, fresh };
   } catch (error) {
     await db
       .update(imports)
@@ -384,7 +387,13 @@ export async function createMessageImport(
   db: Database,
   userId: string,
   input: MessageImportInput,
-  options: { retentionHours?: number; now?: Date; enhance?: DraftEnhancer } = {},
+  options: {
+    retentionHours?: number;
+    now?: Date;
+    enhance?: DraftEnhancer;
+    /** Called with the newly persisted suggestions; a failing hook never fails the import. */
+    onNewDetections?: (fresh: SuggestionDto[]) => void | Promise<void>;
+  } = {},
 ): Promise<MessageImportResult> {
   const now = options.now ?? new Date();
   const retention = retentionUntil(now, options.retentionHours ?? 72);
@@ -408,7 +417,7 @@ export async function createMessageImport(
     }
   }
 
-  const { row, suggestions } = await runWithImport(
+  const { row, suggestions, fresh } = await runWithImport(
     db,
     {
       userId,
@@ -429,6 +438,17 @@ export async function createMessageImport(
     },
     drafts,
   );
+
+  if (fresh.length > 0 && options.onNewDetections) {
+    try {
+      await options.onNewDetections(fresh);
+    } catch (error) {
+      console.error(
+        "[detections] detection notification hook failed:",
+        error instanceof Error ? error.message : "unknown error",
+      );
+    }
+  }
 
   return {
     import: toImportDto(row),
@@ -614,6 +634,8 @@ export async function createCsvImport(
     retentionHours?: number;
     now?: Date;
     timeZone: string;
+    /** Called with suggestions still awaiting review; auto-tracked ones are not reported. */
+    onNewDetections?: (fresh: SuggestionDto[]) => void | Promise<void>;
   },
 ): Promise<CsvImportResult> {
   const prepared = prepareCsv({ csv: input.csv, mapping: input.mapping });
@@ -671,7 +693,7 @@ export async function createCsvImport(
     truncated: prepared.parsed.truncated,
   };
 
-  const { row, suggestions } = await runWithImport(
+  const { row, suggestions, fresh: freshSuggestions } = await runWithImport(
     db,
     {
       userId,
@@ -710,6 +732,23 @@ export async function createCsvImport(
       autoTracked += 1;
     } else {
       resolvedSuggestions.push(suggestion);
+    }
+  }
+
+  if (input.onNewDetections) {
+    const stillPending = freshSuggestions.filter(
+      (entry) =>
+        resolvedSuggestions.find((resolved) => resolved.id === entry.id)?.status === "pending",
+    );
+    if (stillPending.length > 0) {
+      try {
+        await input.onNewDetections(stillPending);
+      } catch (error) {
+        console.error(
+          "[detections] detection notification hook failed:",
+          error instanceof Error ? error.message : "unknown error",
+        );
+      }
     }
   }
 

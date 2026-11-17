@@ -108,6 +108,11 @@ export function NotificationsPage() {
                       Open due list
                     </Link>
                   ) : null}
+                  {item.entityType === "detection_batch" ? (
+                    <Link to="/detections" className="font-semibold text-brand-700 hover:underline">
+                      Open Review
+                    </Link>
+                  ) : null}
                   {!item.readAt ? (
                     <button
                       type="button"

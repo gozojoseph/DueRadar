@@ -21,9 +21,18 @@ import {
   previewCsv,
   type MessageImportInput,
 } from "../services/detection.js";
+import { createDetectionNotifier } from "../services/detection-notify.js";
 import { createLlmEnhancer } from "../services/llm-detect.js";
 
 const CSV_BODY_LIMIT = CSV_MAX_BYTES + 512 * 1024;
+
+const MESSAGE_SOURCE_LABELS: Record<string, string> = {
+  paste: "pasted text",
+  ocr: "a scanned receipt",
+  upload: "an uploaded file",
+  email: "a forwarded email",
+  api: "an API import",
+};
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -42,11 +51,20 @@ export async function registerImportRoutes(
     async (request, reply) => {
       const user = await requireUser(request, env);
       const input = parseBody(importMessageSchema, request.body);
+      const notifier = createDetectionNotifier(db, user.id, env);
       const result = await createMessageImport(
         db,
         user.id,
         input as MessageImportInput,
-        { retentionHours: env.DETECTION_RAW_RETENTION_HOURS, enhance },
+        {
+          retentionHours: env.DETECTION_RAW_RETENTION_HOURS,
+          enhance,
+          onNewDetections: (fresh) =>
+            notifier.notify({
+              sourceLabel: MESSAGE_SOURCE_LABELS[input.source] ?? "an import",
+              suggestions: fresh,
+            }),
+        },
       );
       await recordAudit(db, request, {
         userId: user.id,
@@ -86,12 +104,15 @@ export async function registerImportRoutes(
       const user = await requireUser(request, env);
       const input = parseBody(csvImportSchema, request.body);
       const profile = await ensureProfile(db, user);
+      const notifier = createDetectionNotifier(db, user.id, env);
       const result = await createCsvImport(db, user.id, {
         csv: input.csv,
         mapping: input.mapping,
         fileName: input.fileName ?? null,
         retentionHours: env.DETECTION_RAW_RETENTION_HOURS,
         timeZone: profile.timezone,
+        onNewDetections: (fresh) =>
+          notifier.notify({ sourceLabel: "your CSV import", suggestions: fresh }),
       });
       await recordAudit(db, request, {
         userId: user.id,

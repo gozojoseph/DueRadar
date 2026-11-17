@@ -5,7 +5,8 @@ import { z } from "zod";
 import { ApiError, conflict } from "../lib/errors.js";
 import type { Database } from "../db.js";
 import type { Env } from "../env.js";
-import { createMessageImport } from "./detection.js";
+import { createMessageImport, type SuggestionDto } from "./detection.js";
+import { createDetectionNotifier } from "./detection-notify.js";
 import type { DraftEnhancer } from "./llm-detect.js";
 
 const GMAIL_PROVIDER = "gmail";
@@ -628,6 +629,7 @@ export async function syncGmailMessages(
 
   let detected = 0;
   let imported = 0;
+  const collected: SuggestionDto[] = [];
   for (const message of messages) {
     if (!message.id) continue;
     const text = extractGmailText(message);
@@ -647,10 +649,27 @@ export async function syncGmailMessages(
           internalDate: message.internalDate ?? null,
         },
       },
-      { now: options.now, enhance: options.enhance },
+      {
+        now: options.now,
+        enhance: options.enhance,
+        onNewDetections: (fresh) => {
+          collected.push(...fresh);
+        },
+      },
     );
     imported += 1;
     detected += result.summary.detected;
+  }
+
+  // One batched notification per sync run, never one per message. The user is
+  // not looking at the app when Gmail finds something, so push as well.
+  if (collected.length > 0) {
+    const notifier = createDetectionNotifier(db, userId, env);
+    await notifier.notify({
+      sourceLabel: "your Gmail",
+      suggestions: collected,
+      withPush: true,
+    });
   }
 
   const syncedAt = (options.now ?? new Date()).toISOString();
