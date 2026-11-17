@@ -18,6 +18,7 @@ import { Wordmark } from "./Logo";
 import { Badge, Button, Modal, cx } from "./ui";
 import { useDetectionSummary, useMe, useNotifications } from "../lib/queries";
 import { useInstallPrompt, useOnline } from "../lib/usePwa";
+import { usePushPrompt } from "../lib/usePushPrompt";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Home, end: true },
@@ -89,8 +90,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const notifications = useNotifications();
   const detections = useDetectionSummary();
   const { canInstall, canPrompt, isIos, installed, dismissed, install, dismiss } = useInstallPrompt();
+  const pushPrompt = usePushPrompt();
   const [iosHelp, setIosHelp] = useState(false);
   const showInstall = canInstall && !installed && !dismissed;
+  const showPushBanner =
+    (pushPrompt.status === "ask" || pushPrompt.status === "finish") &&
+    !location.pathname.startsWith("/onboarding") &&
+    !location.pathname.startsWith("/settings");
 
   function badgeFor(path: string): number | undefined {
     if (path === "/notifications") return notifications.data?.unread;
@@ -168,6 +174,35 @@ export function AppShell({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={dismiss}
                 aria-label="Dismiss install prompt"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-brand-800/70 hover:bg-brand-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {showPushBanner ? (
+          <div className="border-t border-line/70 bg-brand-50/60">
+            <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 sm:px-6">
+              <Bell className="h-4 w-4 shrink-0 text-brand-700" aria-hidden />
+              <p className="min-w-0 flex-1 truncate text-xs font-medium text-brand-900">
+                {pushPrompt.status === "ask"
+                  ? "Turn on notifications so due-date reminders reach this device."
+                  : "Notifications are allowed but not yet active on this device."}
+              </p>
+              <button
+                type="button"
+                disabled={pushPrompt.enabling}
+                onClick={() => void pushPrompt.enable()}
+                className="shrink-0 rounded-full bg-brand-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {pushPrompt.status === "ask" ? "Allow" : "Enable"}
+              </button>
+              <button
+                type="button"
+                onClick={pushPrompt.dismiss}
+                aria-label="Dismiss notification prompt"
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-brand-800/70 hover:bg-brand-100"
               >
                 <X className="h-3.5 w-3.5" />
