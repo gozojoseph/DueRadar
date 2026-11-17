@@ -107,13 +107,30 @@ reviewer account rather than handing out personal credentials.
   `E7:22:D4:5F:0B:5D:75:92:4C:43:E1:B7:7D:0F:D7:7B:E2:F6:F8:E0:B8:DC:0E:08:BF:0F:9E:4F:A5:F2:39:89`
 - [x] `assetlinks.json` written with the upload-key fingerprint and deployed
   (verified live at `https://app.dueradar.cloud/.well-known/assetlinks.json`)
-- [ ] AAB built (`apps/android/app-release-bundle.aab`)
+- [x] AAB built and signed: `apps\android\app\build\outputs\bundle\release\app-release.aab`
+  (~1.3 MB; signing cert SHA-256 verified against the upload key above)
 - [ ] Play App Signing cert SHA-256 appended after first upload
 
 ## 7. Rebuilding the app
 
-From `apps/android`: `bubblewrap build` (prompts for the keystore and key passwords;
-JDK/SDK/Gradle are cached after the first run). Every store update needs a bumped
-`appVersionCode` in `twa-manifest.json` first. `enableNotifications` is already `true`
-(Android 13+ POST_NOTIFICATIONS). Manifest shortcuts are skipped until the web manifest
-defines per-shortcut icons.
+Recommended recipe (no prompts, live output). From `apps/android`, with
+`JAVA_HOME=C:\Users\gozoj\.bubblewrap\jdk\jdk-17.0.11+9`:
+
+```
+gradlew bundleRelease --console=plain ^
+  -Pandroid.injected.signing.store.file=<path>\android.keystore
+  -Pandroid.injected.signing.store.password=<store pw>
+  -Pandroid.injected.signing.key.alias=android
+  -Pandroid.injected.signing.key.password=<key pw>
+```
+
+Output: `app\build\outputs\bundle\release\app-release.aab`. `bubblewrap build` also
+works but buffers Gradle output and re-prompts for passwords every run. If signing
+fails vaguely or the daemon log shows a native "bad allocation", run `gradlew --stop`
+first, then retry.
+
+Every store update needs a bumped `appVersionCode` in `twa-manifest.json` first.
+`enableNotifications` is already `true` (Android 13+ POST_NOTIFICATIONS). Manifest
+shortcuts are skipped until the web manifest defines per-shortcut icons.
+`minSdkVersion` is 24 in both `twa-manifest.json` and `app/build.gradle`
+(androidbrowserhelper 2.7.4 requires >= 24).
