@@ -213,8 +213,6 @@ export const notificationReadSchema = z
   .object({ ids: z.array(z.string().uuid()).max(200).optional(), all: z.boolean().optional() })
   .strict();
 
-export const testChannelSchema = z.object({ channel: z.enum(["email", "push"]) }).strict();
-
 /* ------------------------------ Phase 2 imports ---------------------------- */
 
 /**

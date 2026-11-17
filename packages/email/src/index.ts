@@ -183,21 +183,6 @@ Help: ${supportEmail}`;
   };
 }
 
-export function buildTestEmail(appOrigin: string, supportEmail: string): {
-  html: string;
-  text: string;
-  subject: string;
-} {
-  const subject = "Your DueRadar email test";
-  const body = `<p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#38423f;">Email delivery is working. Reminders will arrive here at your chosen time, unless quiet hours move them.</p>
-${button(appOrigin, "/settings", "Open notification settings")}`;
-  return {
-    subject,
-    html: layout({ appOrigin, supportEmail, heading: "Email delivery works", preview: subject, body }),
-    text: `Email delivery is working. Reminders will arrive here at your chosen time.\n\nManage reminders: ${appOrigin}/settings\nHelp: ${supportEmail}`,
-  };
-}
-
 export function createEmailClient(config: EmailClientConfig) {
   async function send(message: EmailMessage): Promise<EmailResult> {
     if (!config.apiKey) {
@@ -251,10 +236,6 @@ export function createEmailClient(config: EmailClientConfig) {
     configured: Boolean(config.apiKey),
     async sendReminder(message: Omit<EmailMessage, "html" | "text" | "subject">, input: ReminderEmailInput) {
       const template = buildReminderEmail(input);
-      return send({ ...message, ...template });
-    },
-    async sendTest(message: Omit<EmailMessage, "html" | "text" | "subject">) {
-      const template = buildTestEmail(config.appOrigin, config.supportEmail);
       return send({ ...message, ...template });
     },
   };

@@ -20,7 +20,6 @@ import { registerPaymentMethodRoutes } from "./payment-methods.js";
 import { registerProfileRoutes } from "./profile.js";
 import { registerProviderRoutes } from "./providers.js";
 import { registerSubscriptionRoutes } from "./subscriptions.js";
-import { registerTestRoutes } from "./test.js";
 import { registerWebhookRoutes } from "./webhooks.js";
 
 export interface RouteDependencies {
@@ -50,7 +49,6 @@ export async function registerRoutes(
   await registerDashboardRoutes(app, deps);
   await registerNotificationRoutes(app, deps);
   await registerDeviceRoutes(app, deps);
-  await registerTestRoutes(app, deps);
   await registerExportRoutes(app, deps);
   await registerAccountRoutes(app, deps);
 }

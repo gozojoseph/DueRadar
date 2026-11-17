@@ -438,23 +438,6 @@ export function useRemoveDevice() {
   });
 }
 
-export function useTestEmail() {
-  return useMutation({
-    mutationFn: () => api.post<{ ok: boolean; message: string }>("/test/email", {}),
-  });
-}
-
-export function useTestPush() {
-  return useMutation({
-    mutationFn: () =>
-      api.post<{
-        sent: number;
-        failed: number;
-        failures: Array<{ platform: string | null; statusCode: number | null; reason: string }>;
-      }>("/test/push", { channel: "push" }),
-  });
-}
-
 export function useDeleteAccount() {
   return useMutation({
     mutationFn: (reason?: string) =>

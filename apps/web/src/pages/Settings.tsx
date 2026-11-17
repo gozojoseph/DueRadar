@@ -7,7 +7,6 @@ import {
   Crown,
   Download,
   LogOut,
-  Mail,
   Pencil,
   Plus,
   Settings2,
@@ -48,8 +47,6 @@ import {
   usePaymentMethods,
   useRemoveDevice,
   useRegisterDevice,
-  useTestEmail,
-  useTestPush,
   useStartBillingCheckout,
   useUpdateProfile,
   useVerifyBillingCheckout,
@@ -170,8 +167,6 @@ export function SettingsPage() {
   const deleteMethod = useDeletePaymentMethod();
   const registerDevice = useRegisterDevice();
   const removeDevice = useRemoveDevice();
-  const testEmail = useTestEmail();
-  const testPush = useTestPush();
   const startBillingCheckout = useStartBillingCheckout();
   const verifyBillingCheckout = useVerifyBillingCheckout();
   const markNotifications = useMarkNotificationsRead();
@@ -399,38 +394,6 @@ export function SettingsPage() {
       toast(errorMessage(caught), "error");
     } finally {
       setPushBusy(false);
-    }
-  }
-
-  async function sendTestEmail() {
-    try {
-      const result = await testEmail.mutateAsync();
-      toast(result.message);
-    } catch (caught) {
-      toast(errorMessage(caught), "error");
-    }
-  }
-
-  async function sendTestPush() {
-    try {
-      const result = await testPush.mutateAsync();
-      if (result.sent === 0) {
-        toast(
-          result.failed > 0
-            ? result.failures[0]?.reason ?? "Push failed for every registered device."
-            : "No push-enabled devices yet.",
-          "error",
-        );
-      } else if (result.failed > 0) {
-        toast(
-          `Test sent to ${result.sent} device${result.sent === 1 ? "" : "s"}; ${result.failed} failed: ${result.failures[0]?.reason ?? "delivery failed."}`,
-          "info",
-        );
-      } else {
-        toast(`Test sent to ${result.sent} ${result.sent === 1 ? "device" : "devices"}.`);
-      }
-    } catch (caught) {
-      toast(errorMessage(caught), "error");
     }
   }
 
@@ -840,23 +803,6 @@ export function SettingsPage() {
                   Enable on this browser
                 </Button>
               )}
-              <Button
-                variant="secondary"
-                onClick={() => void sendTestPush()}
-                loading={testPush.isPending}
-                disabled={!config.data?.pushConfigured}
-              >
-                Send test push
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => void sendTestEmail()}
-                loading={testEmail.isPending}
-                disabled={!config.data?.emailConfigured}
-              >
-                <Mail className="h-4 w-4" />
-                Send test email
-              </Button>
               <Button variant="ghost" onClick={() => void markEverythingRead()}>
                 Mark in-app alerts read
               </Button>
