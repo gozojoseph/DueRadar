@@ -20,7 +20,9 @@ export type PaymentMethodKind = (typeof PAYMENT_METHOD_KINDS)[number];
 
 export const DEFAULT_REMINDER_OFFSETS: Record<RecordKind, number[]> = {
   bill: [7, 1],
-  trial: [3, 1],
+  // Day-of matters most for trials: "ends today, cancel now" — the default
+  // 3-and-1 schedule never fires on the last day of a short trial.
+  trial: [3, 1, 0],
   subscription: [3, 1],
   prepaid: [3, 1],
   installment: [3, 1],

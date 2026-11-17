@@ -193,6 +193,7 @@ export function SettingsPage() {
     quietHoursEnd: "07:00",
     emailReminders: true,
     pushReminders: false,
+    overdueReminders: true,
   });
   const [loaded, setLoaded] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -273,6 +274,7 @@ export function SettingsPage() {
       quietHoursEnd: profile.quietHoursEnd || "07:00",
       emailReminders: profile.emailReminders,
       pushReminders: profile.pushReminders,
+      overdueReminders: profile.overdueReminders,
     });
     setLoaded(true);
   }, [me.data, loaded]);
@@ -349,6 +351,7 @@ export function SettingsPage() {
         quietHoursEnd: reminderForm.quietHoursEnd,
         emailReminders: reminderForm.emailReminders,
         pushReminders: reminderForm.pushReminders,
+        overdueReminders: reminderForm.overdueReminders,
       });
       toast("Reminder settings saved. Future reminders were replanned.");
     } catch (caught) {
@@ -780,6 +783,15 @@ export function SettingsPage() {
                 }
                 label="Push reminders"
                 description="Requires at least one registered device below."
+              />
+              <ReminderToggle
+                id="settings-overdue-reminders"
+                checked={reminderForm.overdueReminders}
+                onChange={(next) =>
+                  setReminderForm((current) => ({ ...current, overdueReminders: next }))
+                }
+                label="Overdue nudges"
+                description="If something is still unpaid, nudge at +1, +3 and +7 days after the due date, then stop."
               />
             </div>
 

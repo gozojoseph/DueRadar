@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "overdue_reminders" boolean DEFAULT true NOT NULL;

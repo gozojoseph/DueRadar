@@ -51,6 +51,7 @@ export const profileUpdateSchema = z
     quietHoursEnd: timeOfDay.optional(),
     emailReminders: z.boolean().optional(),
     pushReminders: z.boolean().optional(),
+    overdueReminders: z.boolean().optional(),
   })
   .strict();
 

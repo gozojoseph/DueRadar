@@ -10,6 +10,7 @@ import {
   addDaysToDate,
   defaultReminderChannels,
   defaultReminderOffsets,
+  OVERDUE_REMINDER_OFFSETS,
   planReminders,
   todayInTimeZone,
   zonedWallTimeToUtc,
@@ -135,6 +136,7 @@ function buildOccurrenceDrafts(
       quietHoursEnd: profile.quietHoursEnd,
     },
     now,
+    overdueOffsets: profile.overdueReminders ? OVERDUE_REMINDER_OFFSETS : [],
   });
 
   return plans.map((plan) => ({
@@ -202,7 +204,10 @@ export async function syncSubscriptionReminders(
         eq(billingOccurrences.subscriptionId, subscriptionId),
         eq(billingOccurrences.userId, userId),
         eq(billingOccurrences.status, "pending"),
-        gte(billingOccurrences.dueDate, addDaysToDate(today, -1)),
+        // From one day before the due date through the 75-day horizon. The
+        // back window also covers occurrences awaiting their overdue nudges
+        // (+1/+3/+7 days after the due date).
+        gte(billingOccurrences.dueDate, addDaysToDate(today, -8)),
         lte(billingOccurrences.dueDate, horizon),
       ),
     );

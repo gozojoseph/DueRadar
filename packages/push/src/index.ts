@@ -199,6 +199,18 @@ export function buildReminderPush(options: {
   daysBefore: number;
   appOrigin: string;
 }): PushPayload {
+  // Overdue nudges arrive with negative offsets (-3 = three days overdue).
+  if (options.daysBefore < 0) {
+    const days = -options.daysBefore;
+    return {
+      title: options.isTrial ? "A free trial has ended" : "A payment is overdue",
+      body: options.isTrial
+        ? `A trial ended ${days === 1 ? "yesterday" : `${days} days ago`}. Open DueRadar to check for a charge.`
+        : `A payment is ${days === 1 ? "1 day" : `${days} days`} overdue. Open DueRadar to handle it.`,
+      url: `${options.appOrigin}/occurrences`,
+      tag: `dueradar-${options.isTrial ? "trial" : "payment"}-overdue-${days}`,
+    };
+  }
   const when =
     options.daysBefore === 0 ? "today" : options.daysBefore === 1 ? "tomorrow" : "soon";
   return {

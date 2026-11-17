@@ -24,6 +24,11 @@ export interface ReminderPlanInput {
   now: Date;
   /** Grace after the scheduled fire time during which a catch-up is allowed. */
   catchUpHours?: number;
+  /**
+   * Days *after* the due date to nudge while the occurrence is still unpaid.
+   * Encoded in plans as negative `offsetDays` (-3 = three days overdue).
+   */
+  overdueOffsets?: number[];
 }
 
 export interface PlannedReminder {
@@ -36,6 +41,9 @@ export interface PlannedReminder {
   skipReason?: "quiet-hours-past-deadline";
 }
 
+/** Nudge schedule for unpaid occurrences: +1, +3, +7 days after the due date. */
+export const OVERDUE_REMINDER_OFFSETS = [1, 3, 7];
+
 export function reminderDedupeKey(
   occurrenceId: string,
   channel: ReminderChannel,
@@ -45,29 +53,57 @@ export function reminderDedupeKey(
 }
 
 /**
- * Plans every reminder for one occurrence. Reminders whose fire time has
- * passed are caught up only while the occurrence is still live (not overdue)
- * and only inside the grace window; this keeps a newly added bill from
- * silently missing today's reminder without spamming old ones.
+ * Plans every reminder for one occurrence: the pre-due reminders (offsets days
+ * before the due date) and, while the occurrence stays unpaid, the overdue
+ * nudges (offsets days after it). Reminders whose fire time has passed are
+ * caught up only while the occurrence is still live and only inside the grace
+ * window; this keeps a newly added bill from silently missing today's reminder
+ * without spamming old ones — and stops the overdue nudges once their window
+ * (last overdue offset) has passed.
  */
 export function planReminders(input: ReminderPlanInput): PlannedReminder[] {
   const { occurrenceId, dueDate, offsets, channels, profile, now } = input;
   const catchUpHours = input.catchUpHours ?? 20;
+  const overdueOffsets = input.overdueOffsets ?? [];
   const today = todayInTimeZone(profile.timeZone, now);
-  if (compareDates(dueDate, today) < 0) return [];
+  const pastDue = compareDates(dueDate, today) < 0;
+  if (pastDue && overdueOffsets.length === 0) return [];
 
   const plans: PlannedReminder[] = [];
   const seen = new Set<string>();
 
-  for (const offsetDays of [...new Set(offsets)].sort((a, b) => b - a)) {
-    if (!Number.isInteger(offsetDays) || offsetDays < 0 || offsetDays > 60) continue;
-    const reminderDate = addDaysToDate(dueDate, -offsetDays);
-    const scheduled = zonedWallTimeToUtc(reminderDate, profile.reminderTime, profile.timeZone);
+  // Pre-due reminders: the due date itself is the quiet-hours deadline.
+  // Overdue nudges: fired days after the due date, so the nudge's own date
+  // becomes the deadline — the original due date is already in the past.
+  const candidates = (pastDue ? [] : offsets)
+    .filter((offsetDays) => Number.isInteger(offsetDays) && offsetDays >= 0 && offsetDays <= 60)
+    .map((offsetDays) => ({
+      encoded: offsetDays,
+      reminderDate: addDaysToDate(dueDate, -offsetDays),
+      deadline: dueDate,
+    }))
+    .concat(
+      [...new Set(overdueOffsets)]
+        .filter((daysLate) => Number.isInteger(daysLate) && daysLate > 0 && daysLate <= 60)
+        .map((daysLate) => ({
+          encoded: -daysLate,
+          reminderDate: addDaysToDate(dueDate, daysLate),
+          deadline: addDaysToDate(dueDate, daysLate),
+        })),
+    )
+    .sort((a, b) => a.reminderDate.localeCompare(b.reminderDate));
+
+  for (const candidate of candidates) {
+    const scheduled = zonedWallTimeToUtc(
+      candidate.reminderDate,
+      profile.reminderTime,
+      profile.timeZone,
+    );
     const quiet = applyQuietHours(
       scheduled,
       profile.quietHoursStart,
       profile.quietHoursEnd,
-      dueDate,
+      candidate.deadline,
       profile.timeZone,
     );
     if (quiet.skipped) continue;
@@ -82,18 +118,29 @@ export function planReminders(input: ReminderPlanInput): PlannedReminder[] {
     }
 
     for (const channel of channels) {
-      const dedupeKey = reminderDedupeKey(occurrenceId, channel, offsetDays);
+      const dedupeKey = reminderDedupeKey(occurrenceId, channel, candidate.encoded);
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
-      plans.push({ channel, offsetDays, fireAt, dedupeKey, catchUp, skipped: false });
+      plans.push({
+        channel,
+        offsetDays: candidate.encoded,
+        fireAt,
+        dedupeKey,
+        catchUp,
+        skipped: false,
+      });
     }
   }
 
   return plans;
 }
 
-/** Human label such as "3 days before" or "on the day". */
+/** Human label such as "3 days before", "on the day", or "3 days after due". */
 export function offsetLabel(offsetDays: number): string {
+  if (offsetDays < 0) {
+    const daysLate = -offsetDays;
+    return daysLate === 1 ? "1 day after due" : `${daysLate} days after due`;
+  }
   if (offsetDays === 0) return "On the due date";
   if (offsetDays === 1) return "1 day before";
   return `${offsetDays} days before`;

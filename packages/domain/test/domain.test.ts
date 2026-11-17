@@ -180,6 +180,70 @@ describe("reminder planning", () => {
     });
     expect(tooLate).toEqual([]);
   });
+
+  it("nudges overdue occurrences at +1, +3 and +7 days", () => {
+    const plans = planReminders({
+      occurrenceId: "occ-5",
+      dueDate: "2026-11-14",
+      offsets: [1],
+      channels: ["in_app"],
+      profile,
+      now: new Date("2026-11-15T08:00:00Z"),
+      overdueOffsets: [1, 3, 7],
+    });
+    // Encoded as negative offsets: -1 = one day after the due date.
+    expect(plans.map((plan) => plan.offsetDays)).toEqual([-1, -3, -7]);
+    expect(plans.map((plan) => plan.fireAt.toISOString())).toEqual([
+      "2026-11-15T09:00:00.000Z",
+      "2026-11-17T09:00:00.000Z",
+      "2026-11-21T09:00:00.000Z",
+    ]);
+    expect(new Set(plans.map((plan) => plan.dedupeKey)).size).toBe(3);
+  });
+
+  it("plans nothing for an occurrence overdue beyond the last nudge", () => {
+    const plans = planReminders({
+      occurrenceId: "occ-6",
+      dueDate: "2026-11-05",
+      offsets: [7, 1],
+      channels: ["in_app"],
+      profile,
+      now: new Date("2026-11-15T08:00:00Z"),
+      overdueOffsets: [1, 3, 7],
+    });
+    expect(plans).toEqual([]);
+  });
+
+  it("shifts an overdue nudge out of quiet hours to its own date", () => {
+    const plans = planReminders({
+      occurrenceId: "occ-7",
+      dueDate: "2026-11-13",
+      offsets: [],
+      channels: ["in_app"],
+      profile: { ...profile, reminderTime: "06:00" },
+      now: new Date("2026-11-14T08:00:00Z"),
+      overdueOffsets: [1],
+    });
+    // 06:00 sits inside 21:00-07:00 quiet hours, so the nudge moves to 07:00
+    // of the nudge's own day instead of being skipped against the past due date.
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.offsetDays).toBe(-1);
+    expect(plans[0]?.catchUp).toBe(true);
+    expect(plans[0]?.fireAt.getTime()).toBe(new Date("2026-11-14T08:00:00Z").getTime() + 60_000);
+  });
+
+  it("still plans nothing when the occurrence is overdue and nudges are disabled", () => {
+    const plans = planReminders({
+      occurrenceId: "occ-8",
+      dueDate: "2026-11-14",
+      offsets: [1],
+      channels: ["in_app"],
+      profile,
+      now: new Date("2026-11-15T08:00:00Z"),
+      overdueOffsets: [],
+    });
+    expect(plans).toEqual([]);
+  });
 });
 
 describe("money", () => {

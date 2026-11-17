@@ -24,6 +24,7 @@ export interface Profile {
   quietHoursEnd: string;
   emailReminders: boolean;
   pushReminders: boolean;
+  overdueReminders: boolean;
   planTier: "free" | "plus";
   planExpiresAt: string | null;
   planGrandfathered: boolean;

@@ -68,6 +68,7 @@ export const profiles = pgTable(
     quietHoursEnd: text("quiet_hours_end").notNull().default("07:00"),
     emailReminders: boolean("email_reminders").notNull().default(true),
     pushReminders: boolean("push_reminders").notNull().default(false),
+    overdueReminders: boolean("overdue_reminders").notNull().default(true),
     planTier: text("plan_tier").$type<PlanTier>().notNull().default("free"),
     planExpiresAt: timestamp("plan_expires_at", { withTimezone: true }),
     planGrandfathered: boolean("plan_grandfathered").notNull().default(false),

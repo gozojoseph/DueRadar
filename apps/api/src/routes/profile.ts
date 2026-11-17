@@ -60,7 +60,8 @@ export async function registerProfileRoutes(
       input.quietHoursStart !== undefined ||
       input.quietHoursEnd !== undefined ||
       input.emailReminders !== undefined ||
-      input.pushReminders !== undefined;
+      input.pushReminders !== undefined ||
+      input.overdueReminders !== undefined;
 
     if (reminderSettingsChanged) {
       await resyncUserReminders(db, user.id);
@@ -77,6 +78,7 @@ export async function registerProfileRoutes(
           reminderTime: existing.reminderTime,
           emailReminders: existing.emailReminders,
           pushReminders: existing.pushReminders,
+          overdueReminders: existing.overdueReminders,
         },
       },
     });

@@ -28,9 +28,18 @@ export type DeliveryOutcome =
   | { status: "failed"; error: string };
 
 function whenLabel(daysBefore: number): string {
+  if (daysBefore < 0) {
+    const days = -daysBefore;
+    return days === 1 ? "1 day overdue" : `${days} days overdue`;
+  }
   if (daysBefore === 0) return "today";
   if (daysBefore === 1) return "tomorrow";
   return `in ${daysBefore} days`;
+}
+
+function daysOverdueLabel(daysBefore: number): string {
+  const days = -daysBefore;
+  return days === 1 ? "1 day" : `${days} days`;
 }
 
 /**
@@ -74,6 +83,7 @@ export async function deliverReminder(
   }
 
   const isTrial = subscription.kind === "trial";
+  const overdue = job.offsetDays < 0;
   const when = whenLabel(job.offsetDays);
   const dueLabel = formatDate(occurrence.dueDate, profile.locale, {
     weekday: "short",
@@ -84,16 +94,33 @@ export async function deliverReminder(
   const amountLabel = formatMoney(occurrence.amountMinor, occurrence.currency, profile.locale);
   const itemPath = `/subscriptions/${subscription.id}`;
 
+  if (overdue && !profile.overdueReminders) {
+    // The setting was turned off after planning; the next replan cancels the
+    // jobs, but do not deliver one that slipped through.
+    return { status: "skipped", reason: "Overdue reminders are disabled" };
+  }
+
   if (job.channel === "in_app") {
+    const kind = overdue ? "payment_overdue" : isTrial ? "trial_ending" : "payment_due";
+    const title = overdue
+      ? isTrial
+        ? `${subscription.name} trial ended ${daysOverdueLabel(job.offsetDays)} ago`
+        : `${subscription.name} is ${when}`
+      : isTrial
+        ? `${subscription.name} trial ends ${when}`
+        : `${subscription.name} is due ${when}`;
+    const body = overdue
+      ? isTrial
+        ? `Your free trial ended ${dueLabel}. Check for a charge, then mark it handled or cancel the item.`
+        : `${dueLabel} · ${amountLabel}. It is still unpaid — mark it paid or update the date so reminders stop.`
+      : isTrial
+        ? `Your free trial ends ${dueLabel}. Cancel before then if you do not want to be charged.`
+        : `${dueLabel} · ${amountLabel}. Open DueRadar to review or mark it paid.`;
     await db.insert(notifications).values({
       userId: job.userId,
-      kind: isTrial ? "trial_ending" : "payment_due",
-      title: isTrial
-        ? `${subscription.name} trial ends ${when}`
-        : `${subscription.name} is due ${when}`,
-      body: isTrial
-        ? `Your free trial ends ${dueLabel}. Cancel before then if you do not want to be charged.`
-        : `${dueLabel} · ${amountLabel}. Open DueRadar to review or mark it paid.`,
+      kind,
+      title,
+      body,
       entityType: "occurrence",
       entityId: occurrence.id,
     });

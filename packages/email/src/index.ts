@@ -108,22 +108,41 @@ export function buildReminderEmail(input: ReminderEmailInput): { html: string; t
     itemPath,
   } = input;
 
-  const when =
-    daysBefore === 0
+  const overdue = daysBefore < 0;
+  const daysOverdue = overdue ? -daysBefore : 0;
+  const when = overdue
+    ? daysOverdue === 1
+      ? "1 day overdue"
+      : `${daysOverdue} days overdue`
+    : daysBefore === 0
       ? "today"
       : daysBefore === 1
         ? "tomorrow"
         : `in ${daysBefore} days`;
-  const subject = isTrial
-    ? `${itemName} trial ends ${when}`
-    : `${itemName} ${amountLabel ? `(${amountLabel}) ` : ""}is due ${when}`;
-  const heading = isTrial ? "Your free trial is ending" : "A payment is coming up";
+  const subject = overdue
+    ? isTrial
+      ? `${itemName} trial ended ${when}`
+      : `${itemName} ${amountLabel ? `(${amountLabel}) ` : ""}is ${when}`
+    : isTrial
+      ? `${itemName} trial ends ${when}`
+      : `${itemName} ${amountLabel ? `(${amountLabel}) ` : ""}is due ${when}`;
+  const heading = overdue
+    ? "A payment is overdue"
+    : isTrial
+      ? "Your free trial is ending"
+      : "A payment is coming up";
   const greeting = toName ? `Hi ${escapeHtml(toName)},` : "Hello,";
-  const detail = isTrial
-    ? `Your ${escapeHtml(itemName)} free trial ends <strong>${escapeHtml(dueLabel)}</strong>. Cancel before then if you do not want to be charged.`
-    : `${escapeHtml(itemName)} is a ${escapeHtml(itemKind.toLowerCase())} due <strong>${escapeHtml(dueLabel)}</strong>${
-        amountLabel ? ` for <strong>${escapeHtml(amountLabel)}</strong>` : ""
-      }.`;
+  const detail = overdue
+    ? isTrial
+      ? `Your ${escapeHtml(itemName)} free trial ended <strong>${escapeHtml(dueLabel)}</strong>. If you were charged, review it and mark the item handled or cancel it.`
+      : `${escapeHtml(itemName)} was due on <strong>${escapeHtml(dueLabel)}</strong>${
+          amountLabel ? ` for <strong>${escapeHtml(amountLabel)}</strong>` : ""
+        } and is still unpaid. Mark it paid or update the date so reminders stop.`
+    : isTrial
+      ? `Your ${escapeHtml(itemName)} free trial ends <strong>${escapeHtml(dueLabel)}</strong>. Cancel before then if you do not want to be charged.`
+      : `${escapeHtml(itemName)} is a ${escapeHtml(itemKind.toLowerCase())} due <strong>${escapeHtml(dueLabel)}</strong>${
+          amountLabel ? ` for <strong>${escapeHtml(amountLabel)}</strong>` : ""
+        }.`;
 
   const body = `<p style="margin:0 0 12px;font-size:15px;line-height:1.65;color:#38423f;">${greeting}</p>
 <p style="margin:0 0 18px;font-size:15px;line-height:1.65;color:#38423f;">${detail}</p>
@@ -134,10 +153,20 @@ export function buildReminderEmail(input: ReminderEmailInput): { html: string; t
 <div style="font-size:14px;color:#4b5a56;margin-top:4px;">${escapeHtml(dueLabel)}${amountLabel ? ` · ${escapeHtml(amountLabel)}` : ""}</div>
 </td></tr>
 </table>
-${button(appOrigin, itemPath, isTrial ? "Review the trial" : "View and mark paid")}
-<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#68736f;">If you have already paid, open DueRadar and mark this one paid so we stop reminding you.</p>`;
+${button(appOrigin, itemPath, overdue ? "Handle it now" : isTrial ? "Review the trial" : "View and mark paid")}
+<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#68736f;">${overdue ? "If this was already taken care of, mark it paid in DueRadar and the reminders stop." : "If you have already paid, open DueRadar and mark this one paid so we stop reminding you."}</p>`;
 
-  const text = `${greeting}
+  const text = overdue
+    ? `${greeting}
+
+${isTrial ? `Your ${itemName} free trial ended ${dueLabel}.` : `${itemName} (${itemKind}) was due ${dueLabel}${amountLabel ? ` for ${amountLabel}` : ""} and is still unpaid.`}
+
+Open DueRadar: ${appOrigin}${itemPath}
+
+Mark it paid or update the date so reminders stop.
+Manage reminders: ${appOrigin}/settings
+Help: ${supportEmail}`
+    : `${greeting}
 
 ${isTrial ? `Your ${itemName} free trial ends ${dueLabel}.` : `${itemName} (${itemKind}) is due ${dueLabel}${amountLabel ? ` for ${amountLabel}` : ""}.`}
 
