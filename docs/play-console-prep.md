@@ -98,8 +98,22 @@ reviewer account rather than handing out personal credentials.
 
 - [x] Web gates for the Play build (`?src=play` → hide web checkout UI)
 - [x] `/.well-known/assetlinks.json` route (no-cache, reads `apps/web/public/.well-known/`)
-- [ ] TWA project generated (`apps/android`, Bubblewrap)
-- [ ] Upload keystore created + **password and keystore backed up**
-- [ ] AAB built; upload-key SHA-256 fingerprint extracted
-- [ ] `assetlinks.json` written with upload-key fingerprint and deployed
+- [x] TWA project generated (`apps/android`, Bubblewrap 1.27, JDK 17 + SDK cached in
+  `C:\Users\gozoj\.bubblewrap\config.json`)
+- [x] Upload keystore created: `apps\android\android.keystore`, alias `android`, valid to 2081.
+  Backup copy: `C:\Users\gozoj\Desktop\dueradar-keystore-backup\android.keystore`.
+  **Still TODO: password + file into durable storage (password manager / cloud).**
+- [x] Upload-key SHA-256 (keystore password = key password):
+  `E7:22:D4:5F:0B:5D:75:92:4C:43:E1:B7:7D:0F:D7:7B:E2:F6:F8:E0:B8:DC:0E:08:BF:0F:9E:4F:A5:F2:39:89`
+- [x] `assetlinks.json` written with the upload-key fingerprint and deployed
+  (verified live at `https://app.dueradar.cloud/.well-known/assetlinks.json`)
+- [ ] AAB built (`apps/android/app-release-bundle.aab`)
 - [ ] Play App Signing cert SHA-256 appended after first upload
+
+## 7. Rebuilding the app
+
+From `apps/android`: `bubblewrap build` (prompts for the keystore and key passwords;
+JDK/SDK/Gradle are cached after the first run). Every store update needs a bumped
+`appVersionCode` in `twa-manifest.json` first. `enableNotifications` is already `true`
+(Android 13+ POST_NOTIFICATIONS). Manifest shortcuts are skipped until the web manifest
+defines per-shortcut icons.
