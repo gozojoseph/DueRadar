@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Clock3, CreditCard } from "lucide-react";
+import { ArrowRight, Check, Clock3, CreditCard, XCircle } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge, Button, Card, LoadingBlock, Modal, Note, useToast } from "../components/ui";
 import { MomoPaymentModal } from "../components/MomoPaymentModal";
@@ -235,8 +235,9 @@ export function BillingReturnPage() {
   const toast = useToast();
   const started = useRef(false);
   const [provider, setProvider] = useState<"paystack" | "yebeck" | null>(null);
-  const [status, setStatus] = useState<"checking" | "paid" | "pending" | "error">("checking");
+  const [status, setStatus] = useState<"checking" | "paid" | "pending" | "failed" | "error">("checking");
   const [error, setError] = useState<string | null>(null);
+  const pendingSince = useRef<number | null>(null);
 
   const verifyPayment = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -253,12 +254,20 @@ export function BillingReturnPage() {
         const result = await verify.mutateAsync(reference);
         setProvider(result.provider);
         if (result.status === "paid") {
+          pendingSince.current = null;
           setStatus("paid");
           toast("DueRadar Plus is active. Thank you!");
+        } else if (result.status === "failed") {
+          pendingSince.current = null;
+          setStatus("failed");
         } else {
+          pendingSince.current ??= Date.now();
           setStatus("pending");
         }
       } catch (caught) {
+        // A transient failure while polling must not kill the auto-check —
+        // the next tick retries quietly.
+        if (options?.silent) return;
         setStatus("error");
         setError(errorMessage(caught));
       }
@@ -282,6 +291,14 @@ export function BillingReturnPage() {
     return () => window.clearInterval(timer);
   }, [status, verifyPayment]);
 
+  // Carriers sometimes take a while before a cancelled prompt reports as
+  // failed, so nudge the customer after two minutes instead of letting them
+  // stare at "approve the prompt" indefinitely.
+  const pendingLong =
+    status === "pending" &&
+    pendingSince.current !== null &&
+    Date.now() - pendingSince.current > 120_000;
+
   return (
     <div className="grid min-h-dvh place-items-center px-4 py-10">
       <Card className="w-full max-w-lg p-6 sm:p-8">
@@ -290,6 +307,8 @@ export function BillingReturnPage() {
             <CreditCard className="h-6 w-6" aria-hidden />
           ) : status === "paid" ? (
             <Check className="h-6 w-6" aria-hidden />
+          ) : status === "failed" ? (
+            <XCircle className="h-6 w-6" aria-hidden />
           ) : (
             <Clock3 className="h-6 w-6" aria-hidden />
           )}
@@ -303,7 +322,9 @@ export function BillingReturnPage() {
                 ? provider === "yebeck"
                   ? "Approve the prompt on your phone"
                   : "Payment confirmation is pending"
-                : "We could not confirm the payment"}
+                : status === "failed"
+                  ? "Payment was not completed"
+                  : "We could not confirm the payment"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           {status === "checking"
@@ -314,8 +335,18 @@ export function BillingReturnPage() {
                 ? provider === "yebeck"
                   ? "This page checks automatically. Approve the mobile money prompt on your phone if you have not yet — the plan activates the moment the payment is confirmed."
                   : "The payment has not been confirmed yet. You can check again shortly."
-                : "Your account remains locked until a payment is confirmed."}
+                : status === "failed"
+                  ? provider === "yebeck"
+                    ? "The mobile money prompt was cancelled or expired, so nothing was charged. Choose a plan and try again whenever you are ready."
+                    : "The payment was cancelled or declined, so nothing was charged. You can try again whenever you are ready."
+                  : "Your account remains locked until a payment is confirmed."}
         </p>
+        {pendingLong ? (
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Still waiting. If you cancelled the prompt on your phone, nothing was charged — go back
+            to the plan options to start again.
+          </p>
+        ) : null}
         {error ? (
           <Note tone="error" className="mt-4">
             {error}
@@ -331,6 +362,14 @@ export function BillingReturnPage() {
               Continue to DueRadar
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
+          ) : status === "failed" ? (
+            <Link
+              to="/"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-brand-800 px-5 text-sm font-semibold text-white hover:bg-brand-900"
+            >
+              Choose a plan and try again
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
           ) : (
             <Button
               variant="secondary"
@@ -341,7 +380,7 @@ export function BillingReturnPage() {
               Check payment again
             </Button>
           )}
-          {status !== "paid" ? (
+          {status !== "paid" && status !== "failed" ? (
             <Link
               to="/"
               className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-muted hover:bg-paper-deep"

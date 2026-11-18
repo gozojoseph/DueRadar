@@ -246,7 +246,9 @@ export function SettingsPage() {
         toast(
           result.status === "paid"
             ? "DueRadar Plus is active. Thank you!"
-            : "Payment is not confirmed yet. Your plan will update after the payment provider confirms it.",
+            : result.status === "failed"
+              ? "The payment was not completed, so you were not charged. You can start a new checkout when ready."
+              : "Payment is not confirmed yet. Your plan will update after the payment provider confirms it.",
           result.status === "paid" ? "success" : "info",
         );
         setPendingPaymentReference(result.status === "pending" ? billingReference : null);
@@ -361,6 +363,9 @@ export function SettingsPage() {
       if (result.status === "paid") {
         setPendingPaymentReference(null);
         toast("DueRadar Plus is active. Thank you!");
+      } else if (result.status === "failed") {
+        setPendingPaymentReference(null);
+        toast("That payment was not completed, so you were not charged.", "info");
       } else {
         toast("The payment provider has not confirmed the payment yet.", "info");
       }

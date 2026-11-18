@@ -8,7 +8,7 @@ import type { Env } from "../env.js";
 import { recordAudit } from "../lib/audit.js";
 import { ApiError, badRequest, conflict, notFound, parseBody } from "../lib/errors.js";
 import { ensureProfile } from "../services/profile.js";
-import { applyVerifiedPayment } from "../services/billing.js";
+import { applyVerifiedPayment, isTerminalPaymentFailure } from "../services/billing.js";
 import { getCheckoutProvider } from "../services/payments.js";
 import {
   initializePaystackCheckout,
@@ -66,6 +66,22 @@ export async function registerBillingRoutes(
   deps: { env: Env; db: Database },
 ): Promise<void> {
   const { env, db } = deps;
+
+  // Cancelled, declined, expired, or reversed payments are terminal: mark the
+  // checkout failed so the return page and Settings stop treating it as in
+  // flight. Only rows still pending are touched — a paid transaction is never
+  // downgraded by a later provider status.
+  async function markPendingTransactionFailed(reference: string) {
+    await db
+      .update(billingTransactions)
+      .set({ status: "failed", updatedAt: new Date() })
+      .where(
+        and(
+          eq(billingTransactions.reference, reference),
+          eq(billingTransactions.status, "pending"),
+        ),
+      );
+  }
 
   app.get("/api/v1/billing", async (request) => {
     const user = await requireUser(request, env);
@@ -232,6 +248,17 @@ export async function registerBillingRoutes(
         .limit(1);
       if (!transaction) throw notFound("Payment reference not found.");
 
+      // A previously activated payment stays active — never re-derive Plus
+      // from a later provider status (for example an unrelated reversal).
+      if (transaction.status === "paid") {
+        return {
+          status: "paid" as const,
+          provider: transaction.provider,
+          activated: false,
+          accessUntil: transaction.accessUntil,
+        };
+      }
+
       // Verify against the provider that owns the transaction, not the one
       // currently selected for new checkouts — an admin switch mid-payment
       // must never strand a checkout.
@@ -253,13 +280,22 @@ export async function registerBillingRoutes(
           env.YEBECK_SECRET_KEY,
           transaction.providerTransactionId,
         );
+        if (isTerminalPaymentFailure(collection.status)) {
+          // The customer cancelled the prompt, the prompt expired, or the
+          // payment was declined — nothing was charged.
+          await markPendingTransactionFailed(reference);
+          return {
+            status: "failed" as const,
+            provider: transaction.provider,
+          };
+        }
         payment = {
           id: collection.id,
-          // applyVerifiedPayment matches the payment against the transaction's
-          // own reference, so translate back from Yebeck's MVN- one.
           reference: transaction.reference,
-          status: collection.status === "successful" ? "success" : collection.status,
+          // Everything downstream compares minor units, exactly like the
+          // stored transaction and PLUS_PRICES.
           amount: collection.amountMinor,
+          status: collection.status === "successful" ? "success" : collection.status,
           currency: collection.currency,
           paidAt: collection.paidAt,
         };
@@ -270,6 +306,13 @@ export async function registerBillingRoutes(
           );
         }
         payment = await verifyPaystackCheckout(env.PAYSTACK_SECRET_KEY, reference);
+      }
+      if (isTerminalPaymentFailure(payment.status)) {
+        await markPendingTransactionFailed(reference);
+        return {
+          status: "failed" as const,
+          provider: transaction.provider,
+        };
       }
       if (payment.status !== "success") {
         return {
@@ -415,7 +458,11 @@ export async function registerBillingRoutes(
           });
         }
         const webhookReference = parsed.data.data?.reference;
-        if (parsed.data.event !== "collection.successful" || !webhookReference) {
+        if (
+          (parsed.data.event !== "collection.successful" &&
+            parsed.data.event !== "collection.failed") ||
+          !webhookReference
+        ) {
           // Test pings, unrelated events, and payloads without a reference are
           // acknowledged so the dashboard does not mark the endpoint as failing.
           return reply.code(200).send({ ok: true, ignored: true });
@@ -453,10 +500,20 @@ export async function registerBillingRoutes(
           // Ask Yebeck to retry later; never activate on an unverified claim.
           return reply.code(503).send({ ok: false, pending: true });
         }
+        if (isTerminalPaymentFailure(collection.status)) {
+          // The collection failed after the event was sent (cancelled prompt,
+          // decline, or expiration) — reflect the terminal state locally.
+          await markPendingTransactionFailed(transaction.reference);
+          return reply.code(200).send({ ok: true, failed: true });
+        }
         if (collection.status !== "successful") {
           return reply.code(200).send({ ok: true, pending: true });
         }
 
+        // Yebeck's webhook event is unsigned. The payload may only say that
+        // the customer's collection moved to successful; it is re-checked
+        // server-to-server below and must match the stored checkout before
+        // Plus is activated.
         let result: Awaited<ReturnType<typeof applyVerifiedPayment>>;
         try {
           result = await applyVerifiedPayment(db, transaction.reference, {

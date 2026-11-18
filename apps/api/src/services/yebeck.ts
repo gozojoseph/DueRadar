@@ -24,7 +24,7 @@ const collectionSchema = z.object({
       id: z.string().optional(),
       reference: z.string().min(1),
       status: z.string().min(1),
-      amount: z.number(),
+      amount: z.number().positive(),
       fee: z.number().optional(),
       currency: z.string().min(1),
       network: z.string().optional(),
@@ -34,13 +34,35 @@ const collectionSchema = z.object({
     .passthrough(),
 });
 
+/**
+ * Yebeck returns amounts as decimal GHS; `amountMinor` is the same amount
+ * rounded to minor units (pesewas) so it can be compared with the stored
+ * checkout exactly like Paystack's amount.
+ */
 export interface YebeckCollection {
   id: string;
   reference: string;
   status: string;
-  amountMinor: number;
+  amount: number;
+  fee: number | null;
   currency: string;
+  network: string | null;
+  isTest: boolean;
+  amountMinor: number;
+  currencyMinor: string;
   paidAt: Date | null;
+}
+
+interface RawYebeckCollection {
+  id?: string;
+  reference: string;
+  status: string;
+  amount: number;
+  fee?: number | null;
+  currency: string;
+  network?: string;
+  is_test?: boolean;
+  created_at?: string;
 }
 
 async function yebeckRequest(
@@ -74,20 +96,19 @@ async function yebeckRequest(
   }
 }
 
-function normalizeCollection(data: {
-  id?: string;
-  reference: string;
-  status: string;
-  amount: number;
-  currency: string;
-  created_at?: string;
-}): YebeckCollection {
+function normalizeCollection(data: RawYebeckCollection): YebeckCollection {
+  const amountMinor = Math.round(data.amount * 100);
   return {
     id: data.id ?? data.reference,
     reference: data.reference,
     status: data.status,
-    amountMinor: Math.round(data.amount * 100),
+    amount: data.amount,
+    fee: data.fee ?? null,
     currency: data.currency,
+    network: data.network ?? null,
+    isTest: data.is_test ?? false,
+    amountMinor,
+    currencyMinor: data.currency === "GHS" ? String(amountMinor) : data.currency,
     paidAt: data.created_at ? new Date(data.created_at) : null,
   };
 }

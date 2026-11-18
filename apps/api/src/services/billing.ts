@@ -4,14 +4,44 @@ import { conflict, notFound } from "../lib/errors.js";
 import { billingTransactions, profiles } from "@dueradar/db/schema";
 import type { BillingTransaction } from "@dueradar/db/schema";
 import type { VerifiedPaystackTransaction } from "./paystack.js";
+import type { YebeckCollection } from "./yebeck.js";
 import { PLUS_PRICES } from "./plan.js";
 
+/**
+ * Provider statuses that mean the payment can never complete. Anything else
+ * that is not `successful` is treated as still in flight, so a slow carrier
+ * confirmation never cancels a payment that might yet settle.
+ */
+const TERMINAL_PAYMENT_FAILURES = new Set([
+  "failed",
+  "cancelled",
+  "canceled",
+  "expired",
+  "reversed",
+  "abandoned",
+  "declined",
+]);
+
+export function isTerminalPaymentFailure(status: string): boolean {
+  return TERMINAL_PAYMENT_FAILURES.has(status.trim().toLowerCase());
+}
+
+/**
+ * Both Paystack and Yebeck verify against the same exact payment checks:
+ * the verified response must match the stored checkout's reference,
+ * interval price, amount, and currency before Plus is activated.
+ */
 export function matchesBillingTransaction(
   transaction: Pick<
     BillingTransaction,
     "reference" | "interval" | "amountMinor" | "currency"
   >,
-  payment: VerifiedPaystackTransaction,
+  payment: {
+    reference: string;
+    status: string;
+    amount: number;
+    currency: string;
+  },
 ): boolean {
   const expectedAmount = PLUS_PRICES[transaction.interval].amountMinor;
   return (

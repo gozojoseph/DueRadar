@@ -1,13 +1,17 @@
 import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BillingTransaction } from "@dueradar/db/schema";
-import { matchesBillingTransaction } from "../src/services/billing.js";
 import {
   initializePaystackCheckout,
   verifyPaystackSignature,
   type VerifiedPaystackTransaction,
 } from "../src/services/paystack.js";
+import {
+  isTerminalPaymentFailure,
+  matchesBillingTransaction,
+} from "../src/services/billing.js";
 import { hasPlusAccess, requiresPaidPlan } from "../src/services/plan.js";
+import { verifyYebeckCollection, type YebeckCollection } from "../src/services/yebeck.js";
 
 const now = new Date("2026-11-20T12:00:00.000Z");
 const reference = "dr_1234567890abcdef";
@@ -129,6 +133,22 @@ describe("Paystack payment verification", () => {
     paidAt: now,
   };
 
+  const yebeckAmountMinor = 999;
+  const yebeckAmount = yebeckAmountMinor / 100;
+  const yebeck: YebeckCollection = {
+    id: "ew_1234567890abcdef",
+    reference,
+    status: "successful",
+    amount: yebeckAmount,
+    fee: null,
+    currency: "GHS",
+    network: "mtn",
+    isTest: true,
+    amountMinor: yebeckAmountMinor,
+    currencyMinor: "999",
+    paidAt: now,
+  };
+
   it("accepts only a successful payment matching the exact reference, amount, and currency", () => {
     expect(matchesBillingTransaction(transaction, payment)).toBe(true);
     expect(matchesBillingTransaction(transaction, { ...payment, amount: 9900 })).toBe(false);
@@ -137,6 +157,69 @@ describe("Paystack payment verification", () => {
       false,
     );
     expect(matchesBillingTransaction(transaction, { ...payment, status: "abandoned" })).toBe(false);
+  });
+
+  // Yebeck verifies against the same minor-unit contract as Paystack, so the
+  // payment view carries amountMinor even though Yebeck's wire format is
+  // decimal GHS (converted by the service layer).
+  const yebeckPayment = {
+    reference,
+    status: "success",
+    amount: yebeck.amountMinor,
+    currency: "GHS",
+  };
+
+  it("accepts a matching Yebeck payment when the stored amount and currency match", () => {
+    expect(matchesBillingTransaction(transaction, yebeckPayment)).toBe(true);
+  });
+
+  it("rejects a Yebeck payment whose stored amount does not match the checkout", () => {
+    expect(
+      matchesBillingTransaction(
+        {
+          ...transaction,
+          interval: "annual",
+          amountMinor: 1999,
+        },
+        yebeckPayment,
+      ),
+    ).toBe(false);
+    expect(
+      matchesBillingTransaction(
+        {
+          ...transaction,
+          amountMinor: 1999,
+        },
+        yebeckPayment,
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects a Yebeck payment whose verified amount or currency does not match", () => {
+    expect(
+      matchesBillingTransaction(transaction, { ...yebeckPayment, amount: 99.9 }),
+    ).toBe(false);
+    expect(
+      matchesBillingTransaction(transaction, { ...yebeckPayment, currency: "USD" }),
+    ).toBe(false);
+  });
+
+  it("classifies cancelled, declined, and expired statuses as terminal", () => {
+    for (const status of [
+      "failed",
+      "cancelled",
+      "canceled",
+      "expired",
+      "reversed",
+      "abandoned",
+      "declined",
+      "FAILED",
+    ]) {
+      expect(isTerminalPaymentFailure(status)).toBe(true);
+    }
+    for (const status of ["pending", "successful", "success", "ongoing", "processing"]) {
+      expect(isTerminalPaymentFailure(status)).toBe(false);
+    }
   });
 
   it("validates the HMAC signature over the exact webhook bytes", () => {
@@ -148,6 +231,42 @@ describe("Paystack payment verification", () => {
       false,
     );
     expect(verifyPaystackSignature(rawBody, undefined, secret)).toBe(false);
+  });
+
+  it("passes its raw response through so the exact amount and currency can be compared against the stored checkout", () => {
+    expect(yebeck.status).toBe("successful");
+    expect(yebeck.amountMinor).toBe(999);
+    expect(yebeck.currencyMinor).toBe("999");
+    expect(yebeck.currency).toBe("GHS");
+    expect(yebeck.network).toBe("mtn");
+    expect(yebeck.isTest).toBe(true);
+  });
+
+  it("normalizes a Yebeck collection response for the amount and currency checks", async () => {
+    const fetchMock = vi.fn(
+      async (_input: unknown, _init?: RequestInit): Promise<Response> =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            message: "ok",
+            data: {
+              id: yebeck.id,
+              reference: yebeck.reference,
+              status: yebeck.status,
+              amount: yebeck.amount,
+              currency: yebeck.currency,
+              network: yebeck.network,
+              is_test: yebeck.isTest,
+              created_at: now.toISOString(),
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const collection = await verifyYebeckCollection(secret, yebeck.reference);
+    expect(collection).toEqual(yebeck);
   });
 
   it("initializes checkout with the server-owned GHS price and callback", async () => {

@@ -261,7 +261,7 @@ export interface CheckoutResult {
 }
 
 export interface VerifyPaymentResult {
-  status: "paid" | "pending";
+  status: "paid" | "pending" | "failed";
   provider: "paystack" | "yebeck";
   activated?: boolean;
   accessUntil?: string | null;
