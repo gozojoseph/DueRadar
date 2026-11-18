@@ -42,10 +42,20 @@ const paystackWebhookSchema = z.object({
   data: z.object({ reference: z.string().min(8).max(100) }).passthrough(),
 });
 
-const yebeckWebhookSchema = z.object({
-  event: z.string().max(100),
-  data: z.object({ reference: z.string().min(8).max(100) }).passthrough(),
-});
+// Yebeck's dashboard sends a test ping of arbitrary shape when a webhook URL
+// is saved, and their payload shapes are not documented in detail. The payload
+// is never trusted anyway (every actionable event is re-verified
+// server-to-server), so accept anything that parses as a JSON object and only
+// act on `collection.successful` events carrying a reference.
+const yebeckWebhookSchema = z
+  .object({
+    event: z.string().max(100).optional(),
+    data: z
+      .object({ reference: z.string().min(1).max(100) })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
 
 function serviceUnavailable(message: string): ApiError {
   return new ApiError(503, "billing_not_configured", message);
@@ -389,18 +399,21 @@ export async function registerBillingRoutes(
             error: { code: "invalid_payload", message: "Unreadable webhook payload." },
           });
         }
-        if (parsed.data.event !== "collection.successful") {
+        const webhookReference = parsed.data.data?.reference;
+        if (parsed.data.event !== "collection.successful" || !webhookReference) {
+          // Test pings, unrelated events, and payloads without a reference are
+          // acknowledged so the dashboard does not mark the endpoint as failing.
           return reply.code(200).send({ ok: true, ignored: true });
         }
 
         const [transaction] = await db
           .select({ reference: billingTransactions.reference, provider: billingTransactions.provider })
           .from(billingTransactions)
-          .where(eq(billingTransactions.reference, parsed.data.data.reference))
+          .where(eq(billingTransactions.reference, webhookReference))
           .limit(1);
         if (!transaction || transaction.provider !== "yebeck") {
           request.log.warn(
-            { reference: parsed.data.data.reference },
+            { reference: webhookReference },
             "Ignored Yebeck webhook for an unknown payment reference",
           );
           return reply.code(200).send({ ok: true, ignored: true });
@@ -410,11 +423,11 @@ export async function registerBillingRoutes(
         try {
           collection = await verifyYebeckCollection(
             env.YEBECK_SECRET_KEY,
-            parsed.data.data.reference,
+            webhookReference,
           );
         } catch (error) {
           request.log.error(
-            { reference: parsed.data.data.reference, err: error },
+            { reference: webhookReference, err: error },
             "Yebeck webhook re-verification failed",
           );
           // Ask Yebeck to retry later; never activate on an unverified claim.
@@ -426,7 +439,7 @@ export async function registerBillingRoutes(
 
         let result: Awaited<ReturnType<typeof applyVerifiedPayment>>;
         try {
-          result = await applyVerifiedPayment(db, parsed.data.data.reference, {
+          result = await applyVerifiedPayment(db, webhookReference, {
             id: collection.id,
             reference: collection.reference,
             status: "success",
@@ -437,7 +450,7 @@ export async function registerBillingRoutes(
         } catch (error) {
           if (error instanceof ApiError && error.statusCode === 409) {
             request.log.error(
-              { reference: parsed.data.data.reference, reason: error.message },
+              { reference: webhookReference, reason: error.message },
               "Yebeck payment did not match the stored checkout",
             );
             return reply.code(200).send({ ok: true, rejected: true });
@@ -445,7 +458,7 @@ export async function registerBillingRoutes(
           throw error;
         }
         request.log.info(
-          { reference: parsed.data.data.reference, activated: result.activated },
+          { reference: webhookReference, activated: result.activated },
           "Yebeck payment verified",
         );
         return reply.code(200).send({ ok: true });
