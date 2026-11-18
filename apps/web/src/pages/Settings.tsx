@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   BellRing,
+  CalendarClock,
   Check,
   CreditCard,
   Crown,
@@ -47,6 +48,7 @@ import {
   usePaymentMethods,
   useRemoveDevice,
   useRegisterDevice,
+  usePreviewReminderPush,
   useStartBillingCheckout,
   useTestDevicePush,
   useUpdateProfile,
@@ -171,6 +173,7 @@ export function SettingsPage() {
   const registerDevice = useRegisterDevice();
   const removeDevice = useRemoveDevice();
   const testDevicePush = useTestDevicePush();
+  const previewReminderPush = usePreviewReminderPush();
   const startBillingCheckout = useStartBillingCheckout();
   const androidApp = isAndroidApp();
   const verifyBillingCheckout = useVerifyBillingCheckout();
@@ -411,6 +414,19 @@ export function SettingsPage() {
             ? "Test notification sent — check this device."
             : `Test notification sent to ${result.sent} devices.`,
         );
+      } else {
+        toast(result.message ?? "No registered devices to reach. Enable push first.", "error");
+      }
+    } catch (caught) {
+      toast(errorMessage(caught), "error");
+    }
+  }
+
+  async function previewDueSoonReminder() {
+    try {
+      const result = await previewReminderPush.mutateAsync();
+      if (result.sent > 0) {
+        toast("Reminder preview sent — check the notification.");
       } else {
         toast(result.message ?? "No registered devices to reach. Enable push first.", "error");
       }
@@ -826,14 +842,24 @@ export function SettingsPage() {
                 </Button>
               )}
               {(devices.data?.devices.length ?? 0) > 0 ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => void sendTestPush()}
-                  loading={testDevicePush.isPending}
-                >
-                  <BellRing className="h-4 w-4" />
-                  Send test notification
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void sendTestPush()}
+                    loading={testDevicePush.isPending}
+                  >
+                    <BellRing className="h-4 w-4" />
+                    Send test notification
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void previewDueSoonReminder()}
+                    loading={previewReminderPush.isPending}
+                  >
+                    <CalendarClock className="h-4 w-4" />
+                    Preview due-soon reminder
+                  </Button>
+                </>
               ) : null}
               <Button variant="ghost" onClick={() => void markEverythingRead()}>
                 Mark in-app alerts read

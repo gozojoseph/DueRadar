@@ -8,7 +8,7 @@ import { badRequest, notFound, parseBody } from "../lib/errors.js";
 import { recordAudit } from "../lib/audit.js";
 import type { Clients } from "../lib/clients.js";
 import { deviceInputSchema } from "../schemas.js";
-import { PushEndpointError } from "@dueradar/push";
+import { PushEndpointError, buildReminderPush, type PushPayload } from "@dueradar/push";
 
 export async function registerDeviceRoutes(
   app: FastifyInstance,
@@ -103,45 +103,80 @@ export async function registerDeviceRoutes(
     { config: { rateLimit: { max: 5, timeWindow: "1 hour" } } },
     async (request) => {
       const user = await requireUser(request, env);
-      const rows = await db
-        .select()
-        .from(devices)
-        .where(and(eq(devices.userId, user.id), isNull(devices.disabledAt)));
-
-      if (rows.length === 0) {
-        return { sent: 0, failed: 0, message: "No push-enabled devices yet." };
-      }
-
-      let sent = 0;
-      let failed = 0;
-      for (const device of rows) {
-        const result = await clients.push.send(
-          { endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth },
-          {
-            title: "DueRadar test notification",
-            body: "Push notifications are working on this device.",
-            url: `${env.APP_ORIGIN}/settings`,
-            tag: "dueradar-test",
-          },
-        );
-        if (result.ok) sent += 1;
-        else {
-          failed += 1;
-          if (result.gone) {
-            await db
-              .update(devices)
-              .set({ disabledAt: new Date() })
-              .where(eq(devices.id, device.id));
-          }
-        }
-      }
+      const result = await sendPushToAllDevices({ db, clients }, user.id, {
+        title: "DueRadar test notification",
+        body: "Push notifications are working on this device.",
+        url: `${env.APP_ORIGIN}/settings`,
+        tag: "dueradar-test",
+      });
+      const message =
+        result.sent + result.failed === 0 ? "No push-enabled devices yet." : undefined;
 
       await recordAudit(db, request, {
         userId: user.id,
         action: "device.test_push",
-        metadata: { sent, failed },
+        metadata: { sent: result.sent, failed: result.failed },
       });
-      return { sent, failed };
+      return { ...result, message };
     },
   );
+
+  // Sends the exact payload a real "due tomorrow" reminder delivers, so users
+  // can see what a due-date reminder looks like before one fires for real.
+  app.post(
+    "/api/v1/devices/test-reminder",
+    { config: { rateLimit: { max: 5, timeWindow: "1 hour" } } },
+    async (request) => {
+      const user = await requireUser(request, env);
+      const payload = buildReminderPush({ isTrial: false, daysBefore: 1, appOrigin: env.APP_ORIGIN });
+      const result = await sendPushToAllDevices({ db, clients }, user.id, payload);
+      const message =
+        result.sent + result.failed === 0 ? "No push-enabled devices yet." : undefined;
+
+      await recordAudit(db, request, {
+        userId: user.id,
+        action: "device.test_reminder_push",
+        metadata: { sent: result.sent, failed: result.failed },
+      });
+      return { ...result, message, sample: payload };
+    },
+  );
+}
+
+/**
+ * Sends one push payload to every active device of a user, disabling
+ * subscriptions the provider reports as gone (410).
+ */
+async function sendPushToAllDevices(
+  deps: { db: Database; clients: Clients },
+  userId: string,
+  payload: PushPayload,
+): Promise<{ sent: number; failed: number }> {
+  const { db, clients } = deps;
+  const rows = await db
+    .select()
+    .from(devices)
+    .where(and(eq(devices.userId, userId), isNull(devices.disabledAt)));
+
+  if (rows.length === 0) return { sent: 0, failed: 0 };
+
+  let sent = 0;
+  let failed = 0;
+  for (const device of rows) {
+    const result = await clients.push.send(
+      { endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth },
+      payload,
+    );
+    if (result.ok) sent += 1;
+    else {
+      failed += 1;
+      if (result.gone) {
+        await db
+          .update(devices)
+          .set({ disabledAt: new Date() })
+          .where(eq(devices.id, device.id));
+      }
+    }
+  }
+  return { sent, failed };
 }

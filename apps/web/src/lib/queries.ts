@@ -445,6 +445,13 @@ export function useTestDevicePush() {
   });
 }
 
+export function usePreviewReminderPush() {
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ sent: number; failed: number; message?: string }>("/devices/test-reminder"),
+  });
+}
+
 export function useDeleteAccount() {
   return useMutation({
     mutationFn: (reason?: string) =>
