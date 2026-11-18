@@ -36,6 +36,9 @@ importers:
       '@dueradar/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@dueradar/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@dueradar/push':
         specifier: workspace:*
         version: link:../../packages/push
@@ -149,12 +152,18 @@ importers:
       '@dueradar/email':
         specifier: workspace:*
         version: link:../../packages/email
+      '@dueradar/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@dueradar/push':
         specifier: workspace:*
         version: link:../../packages/push
       '@dueradar/scheduling':
         specifier: workspace:*
         version: link:../../packages/scheduling
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(kysely@0.29.9)(pg@8.23.1)
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
@@ -217,6 +226,28 @@ importers:
         version: 4.1.12(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
 
   packages/email:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/providers:
+    dependencies:
+      '@dueradar/db':
+        specifier: workspace:*
+        version: link:../db
+      '@dueradar/detection':
+        specifier: workspace:*
+        version: link:../detection
+      '@dueradar/push':
+        specifier: workspace:*
+        version: link:../push
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(kysely@0.29.9)(pg@8.23.1)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^5.9.3

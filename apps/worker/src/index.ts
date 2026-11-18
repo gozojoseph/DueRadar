@@ -1,6 +1,7 @@
 import { createDatabase, runMigrations } from "@dueradar/db";
 import { createEmailClient, type EmailClient } from "@dueradar/email";
 import { createPushClient, type PushClient } from "@dueradar/push";
+import { pollWatchedGmail } from "./gmail-watch.js";
 import {
   claimJobs,
   deliverReminder,
@@ -46,6 +47,13 @@ const deps: DeliveryDeps = {
 
 let running = true;
 let maintenanceDueAt = Date.now();
+let gmailDueAt = Date.now() + 90_000;
+const gmailWatchConfigured = Boolean(
+  env.GMAIL_OAUTH_CLIENT_ID &&
+    env.GMAIL_OAUTH_CLIENT_SECRET &&
+    env.PROVIDER_TOKEN_ENCRYPTION_KEY,
+);
+const gmailIntervalMs = env.GMAIL_POLL_INTERVAL_MINUTES * 60_000;
 
 function log(level: "info" | "warn" | "error", message: string, meta?: unknown): void {
   const line = { time: new Date().toISOString(), level, service: "dueradar-worker", message, meta };
@@ -167,6 +175,7 @@ log("info", "Worker started", {
   pollIntervalMs: env.POLL_INTERVAL_MS,
   emailConfigured: email.configured,
   pushConfigured: push.configured,
+  gmailWatching: gmailWatchConfigured,
 });
 
 await maintenance();
@@ -183,6 +192,34 @@ while (running) {
 
   if (Date.now() >= maintenanceDueAt) {
     await maintenance();
+  }
+
+  if (gmailWatchConfigured && Date.now() >= gmailDueAt) {
+    gmailDueAt = Date.now() + gmailIntervalMs;
+    try {
+      const watch = await pollWatchedGmail({
+        db,
+        push,
+        appOrigin: env.APP_ORIGIN,
+        clientId: env.GMAIL_OAUTH_CLIENT_ID,
+        clientSecret: env.GMAIL_OAUTH_CLIENT_SECRET,
+        encryptionKey: env.PROVIDER_TOKEN_ENCRYPTION_KEY,
+        intervalMs: gmailIntervalMs,
+        log,
+      });
+      if (watch.checked > 0 || watch.errors > 0) {
+        log("info", "Gmail watch sweep complete", {
+          checked: watch.checked,
+          imported: watch.imported,
+          detected: watch.detected,
+          errors: watch.errors,
+        });
+      }
+    } catch (error) {
+      log("error", "Gmail watch sweep failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   if (!running) break;

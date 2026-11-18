@@ -13,8 +13,10 @@
     "@dueradar/db": "workspace:*",
     "@dueradar/domain": "workspace:*",
     "@dueradar/email": "workspace:*",
+    "@dueradar/providers": "workspace:*",
     "@dueradar/push": "workspace:*",
     "@dueradar/scheduling": "workspace:*",
+    "drizzle-orm": "^0.45.4",
     "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },
