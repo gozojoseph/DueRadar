@@ -251,6 +251,22 @@ export interface AdminBillingTransaction {
 
 export type CheckoutProviderId = "paystack" | "yebeck";
 
+export type MomoNetwork = "mtn" | "telecel" | "at";
+
+export interface CheckoutResult {
+  provider: "paystack" | "yebeck";
+  checkoutUrl?: string;
+  reference: string;
+  status?: string;
+}
+
+export interface VerifyPaymentResult {
+  status: "paid" | "pending";
+  provider: "paystack" | "yebeck";
+  activated?: boolean;
+  accessUntil?: string | null;
+}
+
 export interface AdminPayments {
   activeProvider: CheckoutProviderId;
   providers: Array<{
@@ -518,6 +534,7 @@ export interface BillingPlan {
   activeItemLimit: number | null;
   canUseEmailImport: boolean;
   configured: boolean;
+  provider: "paystack" | "yebeck";
   prices: {
     monthly: { currency: "GHS"; amount: string };
     annual: { currency: "GHS"; amount: string };

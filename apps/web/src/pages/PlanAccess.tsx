@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Clock3, CreditCard } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge, Button, Card, LoadingBlock, Modal, Note, useToast } from "../components/ui";
+import { MomoPaymentModal } from "../components/MomoPaymentModal";
 import { errorMessage } from "../lib/api";
 import {
   useBillingPlan,
@@ -9,6 +10,7 @@ import {
   useVerifyBillingCheckout,
 } from "../lib/queries";
 import { isAndroidApp } from "../lib/android";
+import type { MomoNetwork } from "../lib/types";
 
 export function PlanSelectionModal({
   onLater,
@@ -17,8 +19,10 @@ export function PlanSelectionModal({
 }) {
   const plan = useBillingPlan();
   const checkout = useStartBillingCheckout();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [laterPending, setLaterPending] = useState(false);
+  const [momoPlan, setMomoPlan] = useState<"monthly" | "annual" | null>(null);
   const androidApp = isAndroidApp();
 
   async function deferPlanSelection() {
@@ -89,9 +93,31 @@ export function PlanSelectionModal({
 
   async function selectPlan(interval: "monthly" | "annual") {
     setError(null);
+    if (plan.data?.provider === "yebeck") {
+      // Yebeck has no hosted checkout: collect the mobile money details first.
+      setMomoPlan(interval);
+      return;
+    }
     try {
-      const result = await checkout.mutateAsync(interval);
-      window.location.assign(result.checkoutUrl);
+      const result = await checkout.mutateAsync({ interval });
+      window.location.assign(result.checkoutUrl ?? "");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
+  async function payWithMomo(details: { network: MomoNetwork; msisdn: string; name: string }) {
+    if (!momoPlan) return;
+    setError(null);
+    try {
+      const result = await checkout.mutateAsync({
+        interval: momoPlan,
+        network: details.network,
+        msisdn: details.msisdn,
+        name: details.name,
+      });
+      setMomoPlan(null);
+      navigate(`/billing/return?reference=${encodeURIComponent(result.reference)}`);
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -182,8 +208,22 @@ export function PlanSelectionModal({
       ) : null}
       <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted">
         <CreditCard className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        Payments are processed securely by Paystack. You’ll return to DueRadar after checkout.
+        {plan.data?.provider === "yebeck"
+          ? "Payments are collected by mobile money (MTN, Telecel, AT) via Yebeck. You approve the prompt on your phone."
+          : "Payments are processed securely by Paystack. You’ll return to DueRadar after checkout."}
       </p>
+
+      {momoPlan && plan.data ? (
+        <MomoPaymentModal
+          open
+          planLabel={momoPlan === "annual" ? "Plus annual" : "Plus monthly"}
+          amount={momoPlan === "annual" ? plan.data.prices.annual.amount : plan.data.prices.monthly.amount}
+          busy={checkout.isPending}
+          error={null}
+          onClose={() => setMomoPlan(null)}
+          onPay={payWithMomo}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -194,36 +234,53 @@ export function BillingReturnPage() {
   const verify = useVerifyBillingCheckout();
   const toast = useToast();
   const started = useRef(false);
+  const [provider, setProvider] = useState<"paystack" | "yebeck" | null>(null);
   const [status, setStatus] = useState<"checking" | "paid" | "pending" | "error">("checking");
   const [error, setError] = useState<string | null>(null);
 
-  const verifyPayment = useCallback(async () => {
-    if (!reference) {
-      setStatus("error");
-      setError("The payment provider did not return a reference. Please choose a plan and try again.");
-      return;
-    }
-    setStatus("checking");
-    setError(null);
-    try {
-      const result = await verify.mutateAsync(reference);
-      if (result.status === "paid") {
-        setStatus("paid");
-        toast("DueRadar Plus is active. Thank you!");
-      } else {
-        setStatus("pending");
+  const verifyPayment = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!reference) {
+        setStatus("error");
+        setError("The payment provider did not return a reference. Please choose a plan and try again.");
+        return;
       }
-    } catch (caught) {
-      setStatus("error");
-      setError(errorMessage(caught));
-    }
-  }, [reference, toast, verify.mutateAsync]);
+      if (!options?.silent) {
+        setStatus("checking");
+        setError(null);
+      }
+      try {
+        const result = await verify.mutateAsync(reference);
+        setProvider(result.provider);
+        if (result.status === "paid") {
+          setStatus("paid");
+          toast("DueRadar Plus is active. Thank you!");
+        } else {
+          setStatus("pending");
+        }
+      } catch (caught) {
+        setStatus("error");
+        setError(errorMessage(caught));
+      }
+    },
+    [reference, toast, verify.mutateAsync],
+  );
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     void verifyPayment();
   }, [verifyPayment]);
+
+  // Mobile-money payments stay pending until the user approves the prompt on
+  // their phone, so keep re-checking quietly instead of making them click.
+  useEffect(() => {
+    if (status !== "pending") return;
+    const timer = window.setInterval(() => {
+      void verifyPayment({ silent: true });
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [status, verifyPayment]);
 
   return (
     <div className="grid min-h-dvh place-items-center px-4 py-10">
@@ -243,16 +300,20 @@ export function BillingReturnPage() {
             : status === "paid"
               ? "Your plan is active"
               : status === "pending"
-                ? "Payment confirmation is pending"
+                ? provider === "yebeck"
+                  ? "Approve the prompt on your phone"
+                  : "Payment confirmation is pending"
                 : "We could not confirm the payment"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           {status === "checking"
-            ? "We are verifying the checkout with Paystack. Please keep this page open."
+            ? "We are confirming your payment. Please keep this page open."
             : status === "paid"
               ? "DueRadar Plus is active. Continue to finish setting up your account."
               : status === "pending"
-                ? "Paystack has not confirmed the payment yet. You can check again shortly."
+                ? provider === "yebeck"
+                  ? "This page checks automatically. Approve the mobile money prompt on your phone if you have not yet — the plan activates the moment the payment is confirmed."
+                  : "The payment has not been confirmed yet. You can check again shortly."
                 : "Your account remains locked until a payment is confirmed."}
         </p>
         {error ? (
@@ -260,7 +321,7 @@ export function BillingReturnPage() {
             {error}
           </Note>
         ) : null}
-        {status === "checking" ? <LoadingBlock label="Verifying with Paystack" /> : null}
+        {status === "checking" ? <LoadingBlock label="Confirming payment" /> : null}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           {status === "paid" ? (
             <Link

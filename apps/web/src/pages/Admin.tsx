@@ -685,9 +685,9 @@ const PROVIDER_COPY: Record<
   },
   yebeck: {
     description:
-      "Merchant portal with settlement tracking. Chosen for its settlement terms.",
+      "Mobile money collections (MTN, Telecel, AT) with lower settlement fees. The customer approves a prompt on their phone; DueRadar confirms the payment by polling Yebeck.",
     unavailable:
-      "Not integrated yet — DueRadar has no Yebeck checkout adapter, so it cannot collect payments. Send the integration docs when they arrive and it becomes selectable.",
+      "Not ready — the YEBECK_SECRET_KEY environment variable is missing on the api service. Add it in Render and Yebeck becomes selectable.",
   },
 };
 

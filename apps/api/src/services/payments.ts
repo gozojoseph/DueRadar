@@ -39,13 +39,15 @@ export interface CheckoutProviderStatus {
 }
 
 /**
- * Which providers this deployment can actually serve. Yebeck stays
- * unavailable until its adapter (checkout, verify, webhook) is implemented;
- * the admin toggle refuses to activate an unavailable provider, so checkouts
- * can never be pointed at something that cannot collect payment.
+ * Which providers this deployment can actually serve. A provider is
+ * available when its adapter is implemented and its credentials are
+ * present; the admin toggle refuses to activate an unavailable provider,
+ * so checkouts can never be pointed at something that cannot collect
+ * payment.
  */
 export function checkoutProviderStatuses(env: Env): CheckoutProviderStatus[] {
   const paystackConfigured = Boolean(env.PAYSTACK_SECRET_KEY);
+  const yebeckConfigured = Boolean(env.YEBECK_SECRET_KEY);
   return [
     {
       id: "paystack",
@@ -56,8 +58,8 @@ export function checkoutProviderStatuses(env: Env): CheckoutProviderStatus[] {
     {
       id: "yebeck",
       name: "Yebeck",
-      configured: false,
-      available: false,
+      configured: yebeckConfigured,
+      available: yebeckConfigured,
     },
   ];
 }

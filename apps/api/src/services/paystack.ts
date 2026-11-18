@@ -26,7 +26,8 @@ const verifyResponseSchema = z.object({
 });
 
 export interface VerifiedPaystackTransaction {
-  id: number;
+  /** Paystack returns a numeric id; Yebeck collections use string ids. Both are stored as text. */
+  id: number | string;
   reference: string;
   status: string;
   amount: number;

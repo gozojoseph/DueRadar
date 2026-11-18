@@ -55,7 +55,9 @@ import {
   useVerifyBillingCheckout,
 } from "../lib/queries";
 import { isAndroidApp } from "../lib/android";
+import { MomoPaymentModal } from "../components/MomoPaymentModal";
 import { pushSupported, subscribeToPush, unsubscribeFromPush } from "../lib/push";
+import type { MomoNetwork } from "../lib/types";
 
 const TIMEZONES = [
   "Africa/Accra",
@@ -218,6 +220,7 @@ export function SettingsPage() {
   >(null);
   const [exporting, setExporting] = useState(false);
   const [pendingPaymentReference, setPendingPaymentReference] = useState<string | null>(null);
+  const [momoPlan, setMomoPlan] = useState<"monthly" | "annual" | null>(null);
   const billingReference = searchParams.get("reference");
   const billingReturn = searchParams.get("billing") === "return";
 
@@ -243,7 +246,7 @@ export function SettingsPage() {
         toast(
           result.status === "paid"
             ? "DueRadar Plus is active. Thank you!"
-            : "Payment is not confirmed yet. Your plan will update after Paystack confirms it.",
+            : "Payment is not confirmed yet. Your plan will update after the payment provider confirms it.",
           result.status === "paid" ? "success" : "info",
         );
         setPendingPaymentReference(result.status === "pending" ? billingReference : null);
@@ -323,8 +326,29 @@ export function SettingsPage() {
 
   async function beginCheckout(interval: "monthly" | "annual") {
     try {
-      const result = await startBillingCheckout.mutateAsync(interval);
-      window.location.assign(result.checkoutUrl);
+      if (plan.data?.provider === "yebeck") {
+        // Yebeck has no hosted checkout: collect mobile money details first.
+        setMomoPlan(interval);
+        return;
+      }
+      const result = await startBillingCheckout.mutateAsync({ interval });
+      window.location.assign(result.checkoutUrl ?? "");
+    } catch (caught) {
+      toast(errorMessage(caught), "error");
+    }
+  }
+
+  async function payWithMomo(details: { network: MomoNetwork; msisdn: string; name: string }) {
+    if (!momoPlan) return;
+    try {
+      const result = await startBillingCheckout.mutateAsync({
+        interval: momoPlan,
+        network: details.network,
+        msisdn: details.msisdn,
+        name: details.name,
+      });
+      setMomoPlan(null);
+      navigate(`/billing/return?reference=${encodeURIComponent(result.reference)}`);
     } catch (caught) {
       toast(errorMessage(caught), "error");
     }
@@ -338,7 +362,7 @@ export function SettingsPage() {
         setPendingPaymentReference(null);
         toast("DueRadar Plus is active. Thank you!");
       } else {
-        toast("Paystack has not confirmed the payment yet.", "info");
+        toast("The payment provider has not confirmed the payment yet.", "info");
       }
     } catch (caught) {
       toast(errorMessage(caught), "error");
@@ -623,6 +647,21 @@ export function SettingsPage() {
                       Check payment
                     </Button>
                   </Note>
+                ) : null}
+                {momoPlan && plan.data ? (
+                  <MomoPaymentModal
+                    open
+                    planLabel={momoPlan === "annual" ? "Plus annual" : "Plus monthly"}
+                    amount={
+                      momoPlan === "annual"
+                        ? plan.data.prices.annual.amount
+                        : plan.data.prices.monthly.amount
+                    }
+                    busy={startBillingCheckout.isPending}
+                    error={null}
+                    onClose={() => setMomoPlan(null)}
+                    onPay={(details) => payWithMomo(details)}
+                  />
                 ) : null}
               </>
             ) : null}

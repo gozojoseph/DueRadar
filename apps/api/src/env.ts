@@ -69,6 +69,7 @@ const EnvSchema = z.object({
   GMAIL_OAUTH_CLIENT_SECRET: z.string().optional(),
   PROVIDER_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   PAYSTACK_SECRET_KEY: z.string().optional(),
+  YEBECK_SECRET_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("DueRadar <reminders@dueradar.cloud>"),
   SUPPORT_EMAIL: z.string().default("support@dueradar.cloud"),
   VAPID_PUBLIC_KEY: z.string().optional(),

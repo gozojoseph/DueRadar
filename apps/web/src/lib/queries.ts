@@ -13,6 +13,7 @@ import type {
   AdminUser,
   BillingPlan,
   Category,
+  CheckoutResult,
   Config,
   CsvImportResult,
   CsvMapping,
@@ -28,6 +29,8 @@ import type {
   ImportHistoryItem,
   GmailConnectionStatus,
   GmailSyncResult,
+  MomoNetwork,
+  VerifyPaymentResult,
   MeResponse,
   MessageImportResult,
   Notification,
@@ -177,8 +180,12 @@ export function useBillingPlan() {
 
 export function useStartBillingCheckout() {
   return useMutation({
-    mutationFn: (interval: "monthly" | "annual") =>
-      api.post<{ checkoutUrl: string; reference: string }>("/billing/checkout", { interval }),
+    mutationFn: (input: {
+      interval: "monthly" | "annual";
+      network?: MomoNetwork;
+      msisdn?: string;
+      name?: string;
+    }) => api.post<CheckoutResult>("/billing/checkout", input),
   });
 }
 
@@ -197,10 +204,7 @@ export function useVerifyBillingCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (reference: string) =>
-      api.post<{ status: "paid" | "pending"; activated?: boolean; accessUntil?: string | null }>(
-        "/billing/verify",
-        { reference },
-      ),
+      api.post<VerifyPaymentResult>("/billing/verify", { reference }),
     onSuccess: async () => {
       await refresh();
       await queryClient.invalidateQueries({ queryKey: ["billing"] });
