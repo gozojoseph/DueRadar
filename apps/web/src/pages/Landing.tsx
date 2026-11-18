@@ -292,6 +292,7 @@ export function LandingPage() {
           <a href="/app.apk" download className="hover:text-ink">
             Android app (beta)
           </a>
+          <span>iPhone: open in Safari, tap Share → Add to Home Screen</span>
           <span className="ml-auto inline-flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5" />
             Prices stay in the currency you were charged
