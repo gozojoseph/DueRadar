@@ -289,6 +289,9 @@ export function LandingPage() {
           <Link to="/security" className="hover:text-ink">
             Security
           </Link>
+          <a href="/app.apk" download className="hover:text-ink">
+            Android app (beta)
+          </a>
           <span className="ml-auto inline-flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5" />
             Prices stay in the currency you were charged
