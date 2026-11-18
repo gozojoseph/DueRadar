@@ -438,6 +438,13 @@ export function useRemoveDevice() {
   });
 }
 
+export function useTestDevicePush() {
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ sent: number; failed: number; message?: string }>("/devices/test"),
+  });
+}
+
 export function useDeleteAccount() {
   return useMutation({
     mutationFn: (reason?: string) =>

@@ -48,6 +48,7 @@ import {
   useRemoveDevice,
   useRegisterDevice,
   useStartBillingCheckout,
+  useTestDevicePush,
   useUpdateProfile,
   useVerifyBillingCheckout,
 } from "../lib/queries";
@@ -169,6 +170,7 @@ export function SettingsPage() {
   const deleteMethod = useDeletePaymentMethod();
   const registerDevice = useRegisterDevice();
   const removeDevice = useRemoveDevice();
+  const testDevicePush = useTestDevicePush();
   const startBillingCheckout = useStartBillingCheckout();
   const androidApp = isAndroidApp();
   const verifyBillingCheckout = useVerifyBillingCheckout();
@@ -397,6 +399,23 @@ export function SettingsPage() {
       toast(errorMessage(caught), "error");
     } finally {
       setPushBusy(false);
+    }
+  }
+
+  async function sendTestPush() {
+    try {
+      const result = await testDevicePush.mutateAsync();
+      if (result.sent > 0) {
+        toast(
+          result.sent === 1
+            ? "Test notification sent — check this device."
+            : `Test notification sent to ${result.sent} devices.`,
+        );
+      } else {
+        toast(result.message ?? "No registered devices to reach. Enable push first.", "error");
+      }
+    } catch (caught) {
+      toast(errorMessage(caught), "error");
     }
   }
 
@@ -806,6 +825,16 @@ export function SettingsPage() {
                   Enable on this browser
                 </Button>
               )}
+              {(devices.data?.devices.length ?? 0) > 0 ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => void sendTestPush()}
+                  loading={testDevicePush.isPending}
+                >
+                  <BellRing className="h-4 w-4" />
+                  Send test notification
+                </Button>
+              ) : null}
               <Button variant="ghost" onClick={() => void markEverythingRead()}>
                 Mark in-app alerts read
               </Button>
