@@ -88,6 +88,7 @@ const SECTION_LINKS = [
   { href: "#notifications", label: "Notifications" },
   { href: "#categories", label: "Categories" },
   { href: "#payment-methods", label: "Payment methods" },
+  { href: "#app", label: "App" },
   { href: "#data", label: "Data & privacy" },
 ];
 
@@ -1036,6 +1037,31 @@ export function SettingsPage() {
               DueRadar never stores card numbers, CVVs or PINs. These labels only help you remember
               which account paid a bill.
             </p>
+          </Card>
+        </section>
+
+        <section id="app" className="scroll-mt-24">
+          <Card className="p-5 sm:p-6">
+            <SectionTitle
+              icon={<Smartphone className="h-4 w-4" />}
+              title="Android app"
+              description="Install the beta app on your phone and get reminders on the go."
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink">DueRadar for Android (beta)</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  Direct download, version 1.0.0. Android may ask you to allow installs from your
+                  browser — that is normal for apps outside the Play Store.
+                </p>
+              </div>
+              <a href="/app.apk" download className="shrink-0">
+                <Button variant="secondary" size="sm">
+                  <Download className="h-3.5 w-3.5" />
+                  Download APK
+                </Button>
+              </a>
+            </div>
           </Card>
         </section>
 
