@@ -9,6 +9,7 @@ import type {
   CalendarData,
   AdminBillingTransaction,
   AdminOverview,
+  AdminPayments,
   AdminUser,
   BillingPlan,
   Category,
@@ -16,6 +17,7 @@ import type {
   CsvImportResult,
   CsvMapping,
   CsvPreview,
+  CheckoutProviderId,
   DashboardData,
   DetectionAcceptOverrides,
   DetectionStatus,
@@ -115,6 +117,29 @@ export function useAdminBilling(filters: {
         offset: number;
       }>("/admin/billing", filters),
     staleTime: 15_000,
+  });
+}
+
+export function useAdminPayments(enabled = true) {
+  return useQuery({
+    queryKey: ["admin", "payments"],
+    enabled,
+    queryFn: () => api.get<AdminPayments>("/admin/payments"),
+    staleTime: 15_000,
+  });
+}
+
+export function useSetCheckoutProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { provider: CheckoutProviderId }) =>
+      api.put<{ activeProvider: CheckoutProviderId; changed: boolean }>(
+        "/admin/payments/provider",
+        { provider: input.provider },
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
   });
 }
 

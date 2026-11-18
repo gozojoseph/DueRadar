@@ -9,6 +9,7 @@ import { recordAudit } from "../lib/audit.js";
 import { ApiError, badRequest, conflict, notFound, parseBody } from "../lib/errors.js";
 import { ensureProfile } from "../services/profile.js";
 import { applyVerifiedPayment } from "../services/billing.js";
+import { getCheckoutProvider } from "../services/payments.js";
 import {
   initializePaystackCheckout,
   verifyPaystackCheckout,
@@ -85,6 +86,16 @@ export async function registerBillingRoutes(
         throw serviceUnavailable("Online payments are not configured yet.");
       }
 
+      // New checkouts go to the provider the admin selected. The transaction
+      // row records which provider owns it, so verify/webhook keep working for
+      // in-flight payments even after the admin switches providers.
+      const provider = await getCheckoutProvider(db);
+      if (provider !== "paystack") {
+        throw serviceUnavailable(
+          "The selected payment provider is not ready yet. Checkouts are unavailable.",
+        );
+      }
+
       await ensureProfile(db, user);
       const plan = await getPlanAccess(db, user.id);
       if (plan.grandfathered) {
@@ -96,6 +107,7 @@ export async function registerBillingRoutes(
       await db.insert(billingTransactions).values({
         userId: user.id,
         reference,
+        provider,
         interval: input.interval,
         amountMinor: price.amountMinor,
         currency: "GHS",
@@ -140,6 +152,14 @@ export async function registerBillingRoutes(
         .limit(1);
       if (!transaction) throw notFound("Payment reference not found.");
 
+      // Verify against the provider that owns the transaction, not the one
+      // currently selected for new checkouts — an admin switch mid-payment
+      // must never strand a checkout.
+      if (transaction.provider !== "paystack") {
+        throw serviceUnavailable(
+          "This payment was started with a provider that is not enabled yet.",
+        );
+      }
       const payment = await verifyPaystackCheckout(env.PAYSTACK_SECRET_KEY, reference);
       if (payment.status !== "success") {
         return { status: "pending" as const };

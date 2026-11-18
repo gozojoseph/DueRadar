@@ -13,7 +13,14 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { billingTransactions, profiles, subscriptions } from "@dueradar/db/schema";
+import type { CheckoutProvider } from "@dueradar/db/schema";
 import { isAdminUser, requireAdmin } from "../services/admin.js";
+import {
+  checkoutProviderStatuses,
+  getCheckoutProvider,
+  parseCheckoutProvider,
+  setCheckoutProvider,
+} from "../services/payments.js";
 import type { Database } from "../db.js";
 import type { Env } from "../env.js";
 import { conflict, notFound, parseBody } from "../lib/errors.js";
@@ -42,6 +49,10 @@ const suspensionSchema = z
   .strict();
 
 const userIdSchema = z.object({ userId: z.string().uuid() });
+
+const providerSchema = z
+  .object({ provider: z.string().trim().min(1).max(32) })
+  .strict();
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
@@ -170,6 +181,48 @@ export async function registerAdminRoutes(
 
     return { transactions, total: totalRows[0]?.total ?? 0, limit, offset };
   });
+
+  app.get("/api/v1/admin/payments", async (request) => {
+    await requireAdmin(request, env, db);
+    const [activeProvider, providers] = await Promise.all([
+      getCheckoutProvider(db),
+      Promise.resolve(checkoutProviderStatuses(env)),
+    ]);
+    return { activeProvider, providers };
+  });
+
+  app.put(
+    "/api/v1/admin/payments/provider",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request) => {
+      const admin = await requireAdmin(request, env, db);
+      const input = parseBody(providerSchema, request.body);
+      const next = parseCheckoutProvider(input.provider);
+      const current = await getCheckoutProvider(db);
+
+      const status = checkoutProviderStatuses(env).find((entry) => entry.id === next);
+      if (!status?.available) {
+        throw conflict(
+          next === "yebeck"
+            ? "Yebeck is not configured in this deployment yet, so it cannot serve checkouts."
+            : "That payment provider is not available in this deployment.",
+        );
+      }
+      if (current === next) {
+        return { activeProvider: current, changed: false };
+      }
+
+      await setCheckoutProvider(db, next);
+      await recordAudit(db, request, {
+        userId: admin.id,
+        action: "admin.payments.provider_changed",
+        entityType: "app_setting",
+        entityId: "checkout_provider",
+        metadata: { from: current, to: next },
+      });
+      return { activeProvider: next, changed: true };
+    },
+  );
 
   app.patch(
     "/api/v1/admin/users/:userId/suspension",

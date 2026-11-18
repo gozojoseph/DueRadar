@@ -57,6 +57,13 @@
       "when": 1794916759147,
       "tag": "0007_loving_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794972301583,
+      "tag": "0008_rich_puppet_master",
+      "breakpoints": true
     }
   ]
 }

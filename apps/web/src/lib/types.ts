@@ -249,6 +249,18 @@ export interface AdminBillingTransaction {
   createdAt: string;
 }
 
+export type CheckoutProviderId = "paystack" | "yebeck";
+
+export interface AdminPayments {
+  activeProvider: CheckoutProviderId;
+  providers: Array<{
+    id: CheckoutProviderId;
+    name: string;
+    configured: boolean;
+    available: boolean;
+  }>;
+}
+
 export interface CalendarData {
   year: number;
   month: number;

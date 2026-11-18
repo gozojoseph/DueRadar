@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -27,11 +28,18 @@ import { errorMessage } from "../lib/api";
 import {
   useAdminBilling,
   useAdminOverview,
+  useAdminPayments,
   useAdminUsers,
   useMe,
   useSetAccountSuspension,
+  useSetCheckoutProvider,
 } from "../lib/queries";
-import type { AdminBillingTransaction, AdminUser } from "../lib/types";
+import type {
+  AdminBillingTransaction,
+  AdminPayments,
+  AdminUser,
+  CheckoutProviderId,
+} from "../lib/types";
 
 const PAGE_SIZE = 25;
 
@@ -47,7 +55,7 @@ function formatDate(value: string | null): string {
 }
 
 export function AdminPage() {
-  const [section, setSection] = useState<"users" | "billing">("users");
+  const [section, setSection] = useState<"users" | "billing" | "payments">("users");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [billingStatus, setBillingStatus] =
@@ -56,6 +64,8 @@ export function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [reason, setReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [providerChoice, setProviderChoice] = useState<CheckoutProviderId>("paystack");
+  const [providerError, setProviderError] = useState<string | null>(null);
   const overview = useAdminOverview();
   const users = useAdminUsers(
     { search: appliedSearch, limit: PAGE_SIZE, offset },
@@ -67,6 +77,8 @@ export function AdminPage() {
     limit: PAGE_SIZE,
     offset,
   }, section === "billing");
+  const payments = useAdminPayments(section === "payments");
+  const setProvider = useSetCheckoutProvider();
   const me = useMe();
   const setSuspension = useSetAccountSuspension();
   const toast = useToast();
@@ -76,7 +88,11 @@ export function AdminPage() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  function changeSection(next: "users" | "billing") {
+  useEffect(() => {
+    if (payments.data) setProviderChoice(payments.data.activeProvider);
+  }, [payments.data]);
+
+  function changeSection(next: "users" | "billing" | "payments") {
     setSection(next);
     setOffset(0);
     setSearch("");
@@ -101,11 +117,33 @@ export function AdminPage() {
     }
   }
 
+  async function submitProvider() {
+    if (!payments.data || providerChoice === payments.data.activeProvider) return;
+    setProviderError(null);
+    try {
+      await setProvider.mutateAsync({ provider: providerChoice });
+      toast("Checkout provider updated.");
+    } catch (error) {
+      setProviderError(errorMessage(error));
+    }
+  }
+
   const isBilling = section === "billing";
   const currentPage = isBilling ? billing.data : users.data;
-  const pageError = overview.error ?? (isBilling ? billing.error : users.error);
+  const sectionError =
+    section === "users"
+      ? users.error
+      : section === "billing"
+        ? billing.error
+        : payments.error;
+  const pageError = overview.error ?? sectionError;
   const pageLoading =
-    overview.isLoading || (isBilling ? billing.isLoading : users.isLoading);
+    overview.isLoading ||
+    (section === "users"
+      ? users.isLoading
+      : section === "billing"
+        ? billing.isLoading
+        : payments.isLoading);
   const total = currentPage?.total ?? 0;
   const pageEnd = Math.min(offset + PAGE_SIZE, total);
 
@@ -169,22 +207,32 @@ export function AdminPage() {
             <button
               type="button"
               role="tab"
-              aria-selected={!isBilling}
+              aria-selected={section === "users"}
               onClick={() => changeSection("users")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${!isBilling ? "bg-white text-brand-800 shadow-sm" : "text-muted"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${section === "users" ? "bg-white text-brand-800 shadow-sm" : "text-muted"}`}
             >
               Users
             </button>
             <button
               type="button"
               role="tab"
-              aria-selected={isBilling}
+              aria-selected={section === "billing"}
               onClick={() => changeSection("billing")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${isBilling ? "bg-white text-brand-800 shadow-sm" : "text-muted"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${section === "billing" ? "bg-white text-brand-800 shadow-sm" : "text-muted"}`}
             >
               Billing
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={section === "payments"}
+              onClick={() => changeSection("payments")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${section === "payments" ? "bg-white text-brand-800 shadow-sm" : "text-muted"}`}
+            >
+              Payments
+            </button>
           </div>
+          {section !== "payments" ? (
           <div className="flex w-full gap-2 sm:w-auto">
             <label className="relative min-w-0 flex-1 sm:w-72">
               <Search
@@ -219,10 +267,28 @@ export function AdminPage() {
               </Select>
             ) : null}
           </div>
+          ) : null}
         </div>
 
         {pageLoading ? (
-          <LoadingBlock label={`Loading ${isBilling ? "billing records" : "accounts"}`} />
+          <LoadingBlock
+            label={`Loading ${
+              section === "billing"
+                ? "billing records"
+                : section === "payments"
+                  ? "payment settings"
+                  : "accounts"
+            }`}
+          />
+        ) : section === "payments" ? (
+          <PaymentsPanel
+            payments={payments.data}
+            choice={providerChoice}
+            onChoice={setProviderChoice}
+            onSave={() => void submitProvider()}
+            saving={setProvider.isPending}
+            error={providerError}
+          />
         ) : isBilling ? (
           <BillingTable
             transactions={billing.data?.transactions ?? []}
@@ -604,6 +670,119 @@ export function SuspendedAccountPage({
           </a>
         </div>
       </Card>
+    </div>
+  );
+}
+
+const PROVIDER_COPY: Record<
+  CheckoutProviderId,
+  { description: string; unavailable: string }
+> = {
+  paystack: {
+    description:
+      "Mobile money and card checkout for Ghana. Collects Plus upgrades and settles to your Paystack balance.",
+    unavailable: "",
+  },
+  yebeck: {
+    description:
+      "Merchant portal with settlement tracking. Chosen for its settlement terms.",
+    unavailable:
+      "Not integrated yet — DueRadar has no Yebeck checkout adapter, so it cannot collect payments. Send the integration docs when they arrive and it becomes selectable.",
+  },
+};
+
+function PaymentsPanel({
+  payments,
+  choice,
+  onChoice,
+  onSave,
+  saving,
+  error,
+}: {
+  payments: AdminPayments | undefined;
+  choice: CheckoutProviderId;
+  onChoice: (provider: CheckoutProviderId) => void;
+  onSave: () => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  if (!payments) {
+    return <p className="px-5 py-10 text-center text-sm text-muted">Payment settings unavailable.</p>;
+  }
+
+  return (
+    <div className="p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" aria-hidden />
+        <div>
+          <h3 className="text-sm font-bold text-ink">Checkout provider</h3>
+          <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+            Collects new Plus upgrades. Payments already in progress always settle with the
+            provider that started them, so switching is safe at any time. Changes are recorded
+            in the administrative audit log.
+          </p>
+        </div>
+      </div>
+
+      {error ? (
+        <Note tone="error" className="mb-4">
+          {error}
+        </Note>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Checkout provider">
+        {payments.providers.map((provider) => {
+          const selected = provider.id === choice;
+          const active = provider.id === payments.activeProvider;
+          const copy = PROVIDER_COPY[provider.id];
+          return (
+            <label
+              key={provider.id}
+              className={`cursor-pointer rounded-2xl border p-4 transition ${
+                selected
+                  ? "border-brand-600 bg-brand-50/60 shadow-sm"
+                  : "border-line hover:border-line-strong"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 text-sm font-bold text-ink">
+                  <input
+                    type="radio"
+                    name="checkout-provider"
+                    value={provider.id}
+                    checked={selected}
+                    onChange={() => onChoice(provider.id)}
+                    disabled={!provider.available}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                  {provider.name}
+                </span>
+                <Badge
+                  tone={active ? "brand" : provider.available ? "slate" : "plain"}
+                >
+                  {active ? "Active" : provider.available ? "Ready" : "Not configured"}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted">{copy.description}</p>
+              {!provider.available && copy.unavailable ? (
+                <p className="mt-2 text-xs leading-relaxed text-muted">{copy.unavailable}</p>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          onClick={onSave}
+          disabled={saving || choice === payments.activeProvider}
+        >
+          {saving ? "Applying..." : "Apply"}
+        </Button>
+        <span className="text-xs text-muted">
+          Applies to new checkouts immediately — no redeploy needed.
+        </span>
+      </div>
     </div>
   );
 }

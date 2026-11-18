@@ -47,6 +47,8 @@ export type ProviderConnectionStatus = "active" | "revoked" | "error";
 export type PlanTier = "free" | "plus";
 export type BillingInterval = "monthly" | "annual";
 export type BillingTransactionStatus = "pending" | "paid" | "failed";
+/** Checkout processors DueRadar knows about. */
+export type CheckoutProvider = "paystack" | "yebeck";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -91,6 +93,11 @@ export const billingTransactions = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
     reference: varchar("reference", { length: 100 }).notNull(),
+    /** Checkout provider that owns this transaction; verify/webhook follow it. */
+    provider: varchar("provider", { length: 32 })
+      .$type<CheckoutProvider>()
+      .notNull()
+      .default("paystack"),
     interval: text("interval").$type<BillingInterval>().notNull(),
     amountMinor: integer("amount_minor").notNull(),
     currency: varchar("currency", { length: 3 }).notNull().default("GHS"),
@@ -102,7 +109,10 @@ export const billingTransactions = pgTable(
   },
   (table) => [
     uniqueIndex("billing_transactions_reference_uq").on(table.reference),
-    uniqueIndex("billing_transactions_provider_id_uq").on(table.providerTransactionId),
+    uniqueIndex("billing_transactions_provider_id_uq").on(
+      table.provider,
+      table.providerTransactionId,
+    ),
     index("billing_transactions_user_created_idx").on(table.userId, table.createdAt),
     check(
       "billing_transactions_interval_check",
@@ -112,10 +122,26 @@ export const billingTransactions = pgTable(
       "billing_transactions_status_check",
       sql`${table.status} in ('pending','paid','failed')`,
     ),
+    check(
+      "billing_transactions_provider_check",
+      sql`${table.provider} in ('paystack','yebeck')`,
+    ),
     check("billing_transactions_amount_check", sql`${table.amountMinor} > 0`),
     check("billing_transactions_currency_check", sql`${table.currency} = 'GHS'`),
   ],
 );
+
+/**
+ * Runtime application settings the admin dashboard can change without a
+ * deploy. Rows are few and well-known keys; values are short strings.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: text("value").notNull(),
+  ...timestamps,
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
 
 export const categories = pgTable(
   "categories",
