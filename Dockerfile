@@ -19,6 +19,7 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/detection/package.json packages/detection/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/email/package.json packages/email/package.json
+COPY packages/providers/package.json packages/providers/package.json
 COPY packages/push/package.json packages/push/package.json
 COPY packages/scheduling/package.json packages/scheduling/package.json
 RUN pnpm install --frozen-lockfile
@@ -42,6 +43,7 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/detection/package.json packages/detection/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/email/package.json packages/email/package.json
+COPY packages/providers/package.json packages/providers/package.json
 COPY packages/push/package.json packages/push/package.json
 COPY packages/scheduling/package.json packages/scheduling/package.json
 RUN pnpm install --prod --frozen-lockfile
