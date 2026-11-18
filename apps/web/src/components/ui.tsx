@@ -21,7 +21,14 @@ export function cx(...values: Array<string | false | null | undefined>): string 
 
 /* ---------------------------------- Button --------------------------------- */
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "soft" | "danger";
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "soft"
+  | "danger"
+  | "inverse"
+  | "ghostInverse";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
@@ -32,6 +39,11 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   ghost: "text-ink-soft hover:bg-ink/5",
   soft: "bg-brand-50 text-brand-800 hover:bg-brand-100",
   danger: "bg-danger-strong text-white hover:brightness-95",
+  // For use on dark surfaces (brand-900 cards/banners). Self-contained colors:
+  // never override these via className — cx() does not merge conflicting
+  // Tailwind classes, so overrides lose or win unpredictably by CSS order.
+  inverse: "bg-white text-brand-900 hover:bg-brand-50",
+  ghostInverse: "text-white hover:bg-white/10",
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {

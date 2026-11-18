@@ -261,17 +261,13 @@ export function LandingPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/sign-up">
-                <Button size="lg" className="bg-white text-brand-900 hover:bg-brand-50">
+                <Button size="lg" variant="inverse">
                   Get started
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
               <Link to="/sign-in">
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="text-white hover:bg-white/10"
-                >
+                <Button size="lg" variant="ghostInverse">
                   Sign in
                 </Button>
               </Link>

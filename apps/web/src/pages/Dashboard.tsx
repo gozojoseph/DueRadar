@@ -166,13 +166,13 @@ export function DashboardPage() {
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link to="/subscriptions/new?template=bill">
-                  <Button className="bg-white text-brand-900 hover:bg-brand-50">
+                  <Button variant="inverse">
                     Add a bill
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link to="/subscriptions/new?template=trial">
-                  <Button variant="ghost" className="text-white hover:bg-white/10">
+                  <Button variant="ghostInverse">
                     Track a free trial
                   </Button>
                 </Link>
