@@ -92,7 +92,10 @@ export async function applyVerifiedPayment(
       .update(billingTransactions)
       .set({
         status: "paid",
-        providerTransactionId: String(payment.id),
+        // Paystack's id is only learned at verification time; Yebeck's MVN-
+        // reference is already stored since checkout and must be preserved
+        // (later polls and webhooks still query by it).
+        providerTransactionId: transaction.providerTransactionId ?? String(payment.id),
         paidAt: payment.paidAt ?? now,
         accessUntil,
         updatedAt: now,

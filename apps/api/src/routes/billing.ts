@@ -163,6 +163,12 @@ export async function registerBillingRoutes(
             customerName: input.name || null,
             narration: `DueRadar Plus ${input.interval}`,
           });
+          // Yebeck keys collections by its own MVN- reference, not ours —
+          // remember it so verify/webhook can query the payment later.
+          await db
+            .update(billingTransactions)
+            .set({ providerTransactionId: collection.reference, updatedAt: new Date() })
+            .where(eq(billingTransactions.reference, reference));
           return {
             provider,
             reference,
@@ -236,13 +242,22 @@ export async function registerBillingRoutes(
             "This payment was started with a provider that is not enabled yet.",
           );
         }
+        // Yebeck knows the payment only by its MVN- reference, which was
+        // stored on the transaction at checkout time — not by our dr- one.
+        if (!transaction.providerTransactionId) {
+          throw conflict(
+            "This payment is missing its provider reference. Please start a new checkout.",
+          );
+        }
         const collection = await verifyYebeckCollection(
           env.YEBECK_SECRET_KEY,
-          reference,
+          transaction.providerTransactionId,
         );
         payment = {
           id: collection.id,
-          reference: collection.reference,
+          // applyVerifiedPayment matches the payment against the transaction's
+          // own reference, so translate back from Yebeck's MVN- one.
+          reference: transaction.reference,
           status: collection.status === "successful" ? "success" : collection.status,
           amount: collection.amountMinor,
           currency: collection.currency,
@@ -406,12 +421,17 @@ export async function registerBillingRoutes(
           return reply.code(200).send({ ok: true, ignored: true });
         }
 
+        // Yebeck events carry Yebeck's MVN- reference; the transaction stores
+        // it in providerTransactionId since checkout.
         const [transaction] = await db
           .select({ reference: billingTransactions.reference, provider: billingTransactions.provider })
           .from(billingTransactions)
-          .where(eq(billingTransactions.reference, webhookReference))
+          .where(and(
+            eq(billingTransactions.providerTransactionId, webhookReference),
+            eq(billingTransactions.provider, "yebeck"),
+          ))
           .limit(1);
-        if (!transaction || transaction.provider !== "yebeck") {
+        if (!transaction) {
           request.log.warn(
             { reference: webhookReference },
             "Ignored Yebeck webhook for an unknown payment reference",
@@ -439,9 +459,9 @@ export async function registerBillingRoutes(
 
         let result: Awaited<ReturnType<typeof applyVerifiedPayment>>;
         try {
-          result = await applyVerifiedPayment(db, webhookReference, {
+          result = await applyVerifiedPayment(db, transaction.reference, {
             id: collection.id,
-            reference: collection.reference,
+            reference: transaction.reference,
             status: "success",
             amount: collection.amountMinor,
             currency: collection.currency,
